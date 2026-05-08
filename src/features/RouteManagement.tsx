@@ -1,0 +1,132 @@
+import { useEffect, useState } from "react";
+import { Card, DangerButton, EmptyState, Field, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
+import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
+import { labelToOffsetMin } from "../utils/date";
+import { routeStatusLabels } from "../utils/status";
+import { useMasterOptions } from "./MasterManagement";
+
+const routeDefaults = {
+  type: "main" as RouteType,
+  routeName: "",
+  flightNumber: "",
+  stationId: "",
+  stationName: "",
+  plannedStartLabel: "08:00",
+  plannedEndLabel: "09:00",
+  status: "waiting" as RouteStatus,
+};
+
+export function RouteManagement({ user, businessDate }: { user: AppUser; businessDate: string }) {
+  const [routes, setRoutes] = useState<Route[]>([]);
+  const [draft, setDraft] = useState(routeDefaults);
+  const [editing, setEditing] = useState<Route | null>(null);
+  const [error, setError] = useState("");
+  const { stations } = useMasterOptions(user);
+
+  useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+
+  function applyStation(stationId: string) {
+    const station = stations.find((item) => item.id === stationId);
+    setDraft({ ...draft, stationId, stationName: station?.name || "" });
+  }
+
+  async function save() {
+    const routeName = draft.routeName.trim();
+    const flightNumber = draft.flightNumber.trim();
+    if (!routeName || !flightNumber || !draft.stationId || !draft.plannedStartLabel || !draft.plannedEndLabel) {
+      setError("便名、便番号、ステーション、予定時刻は必須です。");
+      return;
+    }
+    const plannedStartOffsetMin = labelToOffsetMin(draft.plannedStartLabel);
+    const plannedEndOffsetMin = labelToOffsetMin(draft.plannedEndLabel);
+    if (plannedEndOffsetMin <= plannedStartOffsetMin) {
+      setError("予定終了は予定開始より後の時刻にしてください。");
+      return;
+    }
+    const payload = {
+      ...draft,
+      routeName,
+      flightNumber,
+      siteId: user.siteId,
+      businessDate,
+      plannedStartOffsetMin,
+      plannedEndOffsetMin,
+    };
+    try {
+      if (editing) {
+        await updateEntity("routes", editing, payload, user);
+        setEditing(null);
+      } else {
+        await createEntity("routes", payload, user);
+      }
+      setDraft(routeDefaults);
+      setError("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "便の保存に失敗しました。");
+    }
+  }
+
+  async function remove(route: Route) {
+    if ((route.actualStartAt || route.actualEndAt) && !window.confirm("実績時刻がある便です。論理削除しても実績は残ります。続行しますか？")) return;
+    await softDeleteEntity("routes", route, user);
+  }
+
+  return (
+    <Card>
+      <div className="section-header">
+        <div><p className="eyebrow">Routes</p><h2>便管理</h2></div>
+      </div>
+      {error ? <p className="alert">{error}</p> : null}
+      <div className="form-grid inline-form">
+        <Field label="種別">
+          <select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value as RouteType })}>
+            <option value="main">メイン便</option>
+            <option value="sub">サブ便</option>
+          </select>
+        </Field>
+        <Field label="便名"><input value={draft.routeName} onChange={(e) => setDraft({ ...draft, routeName: e.target.value })} /></Field>
+        <Field label="便番号"><input value={draft.flightNumber} onChange={(e) => setDraft({ ...draft, flightNumber: e.target.value })} /></Field>
+        <Field label="ステーション">
+          <select value={draft.stationId} onChange={(e) => applyStation(e.target.value)}>
+            <option value="">選択</option>
+            {stations.map((station: Station) => <option key={station.id} value={station.id}>{station.area} / {station.name}</option>)}
+          </select>
+        </Field>
+        <Field label="予定開始"><input type="time" value={draft.plannedStartLabel} onChange={(e) => setDraft({ ...draft, plannedStartLabel: e.target.value })} /></Field>
+        <Field label="予定終了"><input type="time" value={draft.plannedEndLabel} onChange={(e) => setDraft({ ...draft, plannedEndLabel: e.target.value })} /></Field>
+        <Field label="状態">
+          <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as RouteStatus })}>
+            {Object.entries(routeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+          </select>
+        </Field>
+        <div className="form-actions">
+          <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+          {editing ? <SecondaryButton type="button" onClick={() => { setEditing(null); setDraft(routeDefaults); }}>キャンセル</SecondaryButton> : null}
+        </div>
+      </div>
+      {routes.length === 0 ? <EmptyState message="この対象日の便はまだありません。" /> : null}
+      <div className="table-wrap">
+        <table>
+          <thead><tr><th>種別</th><th>便名</th><th>便番号</th><th>ステーション</th><th>予定</th><th>状態</th><th>操作</th></tr></thead>
+          <tbody>
+            {routes.map((route) => (
+              <tr key={route.id}>
+                <td>{route.type === "main" ? "メイン" : "サブ"}</td>
+                <td>{route.routeName}</td>
+                <td>{route.flightNumber}</td>
+                <td>{route.stationName}</td>
+                <td>{route.plannedStartLabel} - {route.plannedEndLabel}</td>
+                <td><StatusBadge type="route" status={route.status} /></td>
+                <td className="table-actions">
+                  <SecondaryButton type="button" onClick={() => { setEditing(route); setDraft({ type: route.type, routeName: route.routeName, flightNumber: route.flightNumber, stationId: route.stationId, stationName: route.stationName, plannedStartLabel: route.plannedStartLabel, plannedEndLabel: route.plannedEndLabel, status: route.status }); }}>編集</SecondaryButton>
+                  <DangerButton type="button" onClick={() => remove(route)}>削除</DangerButton>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </Card>
+  );
+}

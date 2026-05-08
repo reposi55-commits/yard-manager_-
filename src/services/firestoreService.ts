@@ -1,0 +1,207 @@
+import {
+  addDoc,
+  collection,
+  doc,
+  onSnapshot,
+  query,
+  Timestamp,
+  updateDoc,
+  where,
+  type DocumentData,
+  type QueryConstraint,
+  type Unsubscribe,
+} from "firebase/firestore";
+import { db, MASTER_BUSINESS_DATE } from "../lib/firebase";
+import type {
+  AppUser,
+  EntityMap,
+  LogAction,
+  LogTargetType,
+  OperationLog,
+  Route,
+  RouteStatus,
+  Task,
+  TaskStatus,
+} from "../types";
+
+type CollectionName = keyof EntityMap;
+
+const targetTypeByCollection: Record<CollectionName, LogTargetType> = {
+  stations: "station",
+  lanes: "lane",
+  workers: "worker",
+  routes: "route",
+  tasks: "task",
+  routeLinks: "routeLink",
+};
+
+function clean<T extends Record<string, unknown>>(value: T): T {
+  return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
+}
+
+function mapDocument<T>(id: string, data: DocumentData): T {
+  return { id, ...data } as T;
+}
+
+export function subscribeCollection<T>(
+  collectionName: string,
+  constraints: QueryConstraint[],
+  onData: (items: T[]) => void,
+  onError: (message: string) => void,
+): Unsubscribe {
+  const ref = collection(db, collectionName);
+  return onSnapshot(
+    query(ref, ...constraints),
+    (snapshot) => {
+      const items = snapshot.docs
+        .map((item) => mapDocument<T>(item.id, item.data()))
+        .filter((item) => !(item as { deleted?: boolean }).deleted);
+      onData(items);
+    },
+    (error) => onError(error.message),
+  );
+}
+
+export function subscribeMasters<K extends "stations" | "lanes" | "workers">(
+  collectionName: K,
+  siteId: string,
+  onData: (items: EntityMap[K][]) => void,
+  onError: (message: string) => void,
+): Unsubscribe {
+  return subscribeCollection<EntityMap[K]>(
+    collectionName,
+    [where("siteId", "==", siteId)],
+    (items) => {
+      const sorted = [...items].sort((a, b) => {
+        const aActive = "active" in a && a.active ? 0 : 1;
+        const bActive = "active" in b && b.active ? 0 : 1;
+        const aOrder = "sortOrder" in a ? Number(a.sortOrder) : 0;
+        const bOrder = "sortOrder" in b ? Number(b.sortOrder) : 0;
+        return aActive - bActive || aOrder - bOrder;
+      });
+      onData(sorted);
+    },
+    onError,
+  );
+}
+
+export function subscribeDaily<K extends "routes" | "tasks" | "routeLinks">(
+  collectionName: K,
+  siteId: string,
+  businessDate: string,
+  onData: (items: EntityMap[K][]) => void,
+  onError: (message: string) => void,
+): Unsubscribe {
+  return subscribeCollection<EntityMap[K]>(
+    collectionName,
+    [where("siteId", "==", siteId), where("businessDate", "==", businessDate)],
+    onData,
+    onError,
+  );
+}
+
+export function subscribeWorkerTasks(
+  siteId: string,
+  businessDate: string,
+  workerId: string,
+  onData: (items: Task[]) => void,
+  onError: (message: string) => void,
+): Unsubscribe {
+  return subscribeCollection<Task>(
+    "tasks",
+    [where("siteId", "==", siteId), where("businessDate", "==", businessDate), where("workerId", "==", workerId)],
+    onData,
+    onError,
+  );
+}
+
+export async function writeOperationLog(input: Omit<OperationLog, "id" | "operatedAt">): Promise<void> {
+  await addDoc(collection(db, "operationLogs"), {
+    ...input,
+    operatedAt: Timestamp.now(),
+  });
+}
+
+export async function createEntity<K extends CollectionName>(
+  collectionName: K,
+  data: Omit<EntityMap[K], "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "deleted">,
+  user: AppUser,
+  action: LogAction = "create",
+): Promise<void> {
+  const now = Timestamp.now();
+  const payload = clean({
+    ...data,
+    createdAt: now,
+    createdBy: user.id,
+    updatedAt: now,
+    updatedBy: user.id,
+    deleted: false,
+  } as Record<string, unknown>);
+  const ref = await addDoc(collection(db, collectionName), payload);
+  await writeOperationLog({
+    siteId: String(payload.siteId),
+    businessDate: String(payload.businessDate || MASTER_BUSINESS_DATE),
+    targetType: targetTypeByCollection[collectionName],
+    targetId: ref.id,
+    action,
+    before: null,
+    after: { id: ref.id, ...payload },
+    operatedBy: user.id,
+  });
+}
+
+export async function updateEntity<K extends CollectionName>(
+  collectionName: K,
+  before: EntityMap[K],
+  patch: Partial<EntityMap[K]>,
+  user: AppUser,
+  action: LogAction = "update",
+): Promise<void> {
+  const updatePayload = clean({
+    ...patch,
+    updatedAt: Timestamp.now(),
+    updatedBy: user.id,
+  } as Record<string, unknown>);
+  await updateDoc(doc(db, collectionName, before.id), updatePayload as Record<string, never>);
+  const after = clean({ ...before, ...updatePayload } as Record<string, unknown>);
+  await writeOperationLog({
+    siteId: before.siteId,
+    businessDate: before.businessDate || MASTER_BUSINESS_DATE,
+    targetType: targetTypeByCollection[collectionName],
+    targetId: before.id,
+    action,
+    before: before as unknown as Record<string, unknown>,
+    after,
+    operatedBy: user.id,
+  });
+}
+
+export async function softDeleteEntity<K extends CollectionName>(collectionName: K, before: EntityMap[K], user: AppUser): Promise<void> {
+  await updateEntity(collectionName, before, {
+    deleted: true,
+    deletedAt: Timestamp.now(),
+    deletedBy: user.id,
+  } as Partial<EntityMap[K]>, user, "delete");
+}
+
+export async function changeRouteStatus(route: Route, status: RouteStatus, user: AppUser): Promise<void> {
+  const patch: Partial<Route> = { status };
+  if (status === "in_progress" && !route.actualStartAt) {
+    patch.actualStartAt = Timestamp.now();
+  }
+  if (status === "completed" && !route.actualEndAt) {
+    patch.actualEndAt = Timestamp.now();
+  }
+  await updateEntity("routes", route, patch, user, "status_change");
+}
+
+export async function changeTaskStatus(task: Task, status: TaskStatus, user: AppUser): Promise<void> {
+  const patch: Partial<Task> = { status };
+  if (status === "in_progress" && !task.actualStartAt) {
+    patch.actualStartAt = Timestamp.now();
+  }
+  if (status === "completed" && !task.actualEndAt) {
+    patch.actualEndAt = Timestamp.now();
+  }
+  await updateEntity("tasks", task, patch, user, "status_change");
+}

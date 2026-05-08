@@ -1,0 +1,52 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function userDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function activeUser() {
+      return signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && userDoc().data.active == true;
+    }
+
+    function isAdmin() {
+      return activeUser() && userDoc().data.role == "admin";
+    }
+
+    function sameSite() {
+      return !("siteId" in resource.data) || resource.data.siteId == userDoc().data.siteId;
+    }
+
+    match /users/{userId} {
+      allow read: if (signedIn() && request.auth.uid == userId) || isAdmin();
+      allow create, update, delete: if isAdmin();
+    }
+
+    match /operationLogs/{logId} {
+      allow read: if isAdmin();
+      allow create: if activeUser() && request.resource.data.operatedBy == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /{collection}/{docId} {
+      allow read: if activeUser() && sameSite();
+      allow create: if isAdmin();
+      allow update: if isAdmin()
+        || (activeUser()
+          && collection in ["routes", "tasks"]
+          && resource.data.siteId == userDoc().data.siteId
+          && request.resource.data.siteId == resource.data.siteId
+          && request.resource.data.businessDate == resource.data.businessDate
+          && request.resource.data.updatedBy == request.auth.uid
+          && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "actualStartAt", "actualEndAt", "updatedAt", "updatedBy"]));
+      allow delete: if false;
+    }
+  }
+}
