@@ -100,6 +100,7 @@ export interface OperationLog {
   businessDate: string;
   targetType: LogTargetType;
   targetId: string;
+  targetLabel?: string;
   action: LogAction;
   before: Record<string, unknown> | null;
   after: Record<string, unknown> | null;

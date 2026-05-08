@@ -295,6 +295,12 @@ td {
   word-break: break-all;
 }
 
+.log-target-label {
+  display: block;
+  margin-top: 4px;
+  font-size: 1rem;
+}
+
 .actual-times {
   min-width: 170px;
 }

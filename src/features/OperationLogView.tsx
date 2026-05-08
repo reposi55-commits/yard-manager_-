@@ -49,11 +49,13 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
     () =>
       sortedLogs.filter((log) => {
         const keyword = searchText.trim().toLowerCase();
+        const targetLabel = getLogTargetLabel(log);
         const matchesTarget = targetFilter === "all" || log.targetType === targetFilter;
         const matchesAction = actionFilter === "all" || log.action === actionFilter;
         const matchesKeyword =
           !keyword ||
           [
+            targetLabel,
             log.targetId,
             log.operatedBy,
             targetLabels[log.targetType],
@@ -78,7 +80,7 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
       {sortedLogs.length > 0 ? (
         <div className="filter-bar">
           <Field label="検索">
-            <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="対象ID・操作者・変更内容" />
+            <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="対象名・対象ID・操作者・変更内容" />
           </Field>
           <Field label="対象">
             <select value={targetFilter} onChange={(event) => setTargetFilter(event.target.value as "all" | LogTargetType)}>
@@ -112,6 +114,7 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
                 <td>{formatTimestamp(log.operatedAt)}</td>
                 <td>
                   <span>{targetLabels[log.targetType] || log.targetType}</span>
+                  <strong className="log-target-label">{getLogTargetLabel(log)}</strong>
                   <small className="muted-id">{log.targetId}</small>
                 </td>
                 <td>{actionLabels[log.action] || log.action}</td>
@@ -124,6 +127,24 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
       </div>
     </Card>
   );
+}
+
+function getLogTargetLabel(log: OperationLog): string {
+  return log.targetLabel || extractTargetLabel(log.after) || extractTargetLabel(log.before) || log.targetId;
+}
+
+function extractTargetLabel(value: Record<string, unknown> | null): string {
+  if (!value) return "";
+  if (typeof value.routeName === "string") return [value.routeName, value.flightNumber].filter(Boolean).join(" / ");
+  if (typeof value.taskName === "string") return [value.taskName, value.workerName].filter(Boolean).join(" / ");
+  if (typeof value.subRouteName === "string" || typeof value.mainRouteName === "string") {
+    const sub = [value.subRouteName, value.subFlightNumber].filter(Boolean).join(" / ");
+    const main = [value.mainRouteName, value.mainFlightNumber].filter(Boolean).join(" / ");
+    return [sub, main].filter(Boolean).join(" → ");
+  }
+  if (typeof value.displayName === "string") return value.displayName;
+  if (typeof value.name === "string") return value.name;
+  return "";
 }
 
 function summarizeChange(log: OperationLog): string {

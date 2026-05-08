@@ -35,6 +35,24 @@ const targetTypeByCollection: Record<CollectionName, LogTargetType> = {
   routeLinks: "routeLink",
 };
 
+function buildTargetLabel(collectionName: CollectionName, value: Record<string, unknown>): string {
+  if (collectionName === "stations") return String(value.name || "");
+  if (collectionName === "lanes") return String(value.name || "");
+  if (collectionName === "workers") return String(value.displayName || value.name || "");
+  if (collectionName === "routes") {
+    return [value.routeName, value.flightNumber].filter(Boolean).join(" / ");
+  }
+  if (collectionName === "tasks") {
+    return [value.taskName, value.workerName].filter(Boolean).join(" / ");
+  }
+  if (collectionName === "routeLinks") {
+    const sub = [value.subRouteName, value.subFlightNumber].filter(Boolean).join(" / ");
+    const main = [value.mainRouteName, value.mainFlightNumber].filter(Boolean).join(" / ");
+    return [sub, main].filter(Boolean).join(" → ");
+  }
+  return "";
+}
+
 function clean<T extends Record<string, unknown>>(value: T): T {
   return Object.fromEntries(Object.entries(value).filter(([, item]) => item !== undefined)) as T;
 }
@@ -143,6 +161,7 @@ export async function createEntity<K extends CollectionName>(
     businessDate: String(payload.businessDate || MASTER_BUSINESS_DATE),
     targetType: targetTypeByCollection[collectionName],
     targetId: ref.id,
+    targetLabel: buildTargetLabel(collectionName, payload),
     action,
     before: null,
     after: { id: ref.id, ...payload },
@@ -169,6 +188,7 @@ export async function updateEntity<K extends CollectionName>(
     businessDate: before.businessDate || MASTER_BUSINESS_DATE,
     targetType: targetTypeByCollection[collectionName],
     targetId: before.id,
+    targetLabel: buildTargetLabel(collectionName, after),
     action,
     before: before as unknown as Record<string, unknown>,
     after,
