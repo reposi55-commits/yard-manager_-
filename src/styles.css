@@ -429,6 +429,13 @@ th {
   font-weight: 800;
 }
 
+.station-label small {
+  display: block;
+  margin-top: 2px;
+  color: #7a4b00;
+  font-size: 0.82rem;
+}
+
 .time-axis,
 .gantt-lane {
   position: relative;

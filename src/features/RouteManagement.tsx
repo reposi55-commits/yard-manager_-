@@ -30,6 +30,11 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
 
+  const selectableStations = useMemo(
+    () => stations.filter((station) => station.active || station.id === draft.stationId),
+    [stations, draft.stationId],
+  );
+
   const filteredRoutes = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     return routes.filter((route) => {
@@ -218,7 +223,11 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
             <Field label="ステーション">
               <select value={draft.stationId} onChange={(event) => applyStation(event.target.value)}>
                 <option value="">選択</option>
-                {stations.map((station: Station) => <option key={station.id} value={station.id}>{station.area} / {station.name}</option>)}
+                {selectableStations.map((station: Station) => (
+                  <option key={station.id} value={station.id}>
+                    {station.area} / {station.name}{station.active ? "" : "（無効）"}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="予定開始">

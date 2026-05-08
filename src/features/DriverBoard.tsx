@@ -17,12 +17,13 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
 
   const groupedStations = useMemo(() => {
     const groups = new Map<string, Station[]>();
-    stations.filter((station) => station.active).forEach((station) => {
+    const routeStationIds = new Set(routes.map((route) => route.stationId));
+    stations.filter((station) => station.active || routeStationIds.has(station.id)).forEach((station) => {
       const area = station.area || "未設定エリア";
       groups.set(area, [...(groups.get(area) || []), station]);
     });
     return [...groups.entries()];
-  }, [stations]);
+  }, [stations, routes]);
 
   return (
     <Card>
@@ -43,7 +44,10 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
               const stationRoutes = routes.filter((route) => route.stationId === station.id);
               return (
                 <div className="gantt-row" key={station.id}>
-                  <div className="station-label">{station.name}</div>
+                  <div className="station-label">
+                    {station.name}
+                    {!station.active ? <small>無効</small> : null}
+                  </div>
                   <div className="gantt-lane">
                     {stationRoutes.map((route) => {
                       const start = Math.max(0, route.plannedStartOffsetMin);

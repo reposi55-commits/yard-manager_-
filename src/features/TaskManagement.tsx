@@ -33,6 +33,14 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const { lanes, workers } = useMasterOptions(user);
   const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
+  const selectableWorkers = useMemo(
+    () => workers.filter((worker) => worker.active || worker.id === draft.workerId),
+    [workers, draft.workerId],
+  );
+  const selectableLanes = useMemo(
+    () => lanes.filter((lane) => lane.active || lane.id === draft.laneId),
+    [lanes, draft.laneId],
+  );
   const filteredTasks = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
     return tasks.filter((task) => {
@@ -232,13 +240,21 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
             <Field label="作業員">
               <select value={draft.workerId} onChange={(event) => applyWorker(event.target.value)}>
                 <option value="">選択</option>
-                {workers.map((worker: Worker) => <option key={worker.id} value={worker.id}>{worker.displayName || worker.name}</option>)}
+                {selectableWorkers.map((worker: Worker) => (
+                  <option key={worker.id} value={worker.id}>
+                    {worker.displayName || worker.name}{worker.active ? "" : "（無効）"}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="レーン">
               <select value={draft.laneId} onChange={(event) => applyLane(event.target.value)}>
                 <option value="">選択</option>
-                {lanes.map((lane: Lane) => <option key={lane.id} value={lane.id}>{lane.area} / {lane.name}</option>)}
+                {selectableLanes.map((lane: Lane) => (
+                  <option key={lane.id} value={lane.id}>
+                    {lane.area} / {lane.name}{lane.active ? "" : "（無効）"}
+                  </option>
+                ))}
               </select>
             </Field>
             <Field label="対象メイン便">
