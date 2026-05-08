@@ -28,8 +28,23 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
   const [editing, setEditing] = useState<Task | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [workerFilter, setWorkerFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const { lanes, workers } = useMasterOptions(user);
   const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
+  const filteredTasks = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return tasks.filter((task) => {
+      const matchesKeyword =
+        !keyword ||
+        [task.taskName, task.workerName, task.laneName, task.targetMainRouteName, task.targetMainFlightNumber]
+          .some((value) => value.toLowerCase().includes(keyword));
+      const matchesWorker = workerFilter === "all" || task.workerId === workerFilter;
+      const matchesStatus = statusFilter === "all" || task.status === statusFilter;
+      return matchesKeyword && matchesWorker && matchesStatus;
+    });
+  }, [tasks, searchText, workerFilter, statusFilter]);
 
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
@@ -125,7 +140,11 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
   }
 
   async function remove(task: Task) {
-    if ((task.actualStartAt || task.actualEndAt) && !window.confirm("実績時刻があるタスクです。論理削除しても実績は残ります。続行しますか？")) return;
+    const label = `${task.taskName} / ${task.workerName}`;
+    const message = task.actualStartAt || task.actualEndAt
+      ? `実績時刻があるタスクです。\n${label} を論理削除しても実績は残ります。続行しますか？`
+      : `${label} を削除しますか？`;
+    if (!window.confirm(message)) return;
     await softDeleteEntity("tasks", task, user);
   }
 
@@ -141,6 +160,26 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
 
       {!formOpen && error ? <p className="alert">{error}</p> : null}
       {tasks.length === 0 ? <EmptyState message="この対象日のタスクはまだありません。" /> : null}
+      {tasks.length > 0 ? (
+        <div className="filter-bar">
+          <Field label="検索">
+            <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="タスク名・作業員・レーン・対象便" />
+          </Field>
+          <Field label="作業員">
+            <select value={workerFilter} onChange={(event) => setWorkerFilter(event.target.value)}>
+              <option value="all">すべて</option>
+              {workers.map((worker: Worker) => <option key={worker.id} value={worker.id}>{worker.displayName || worker.name}</option>)}
+            </select>
+          </Field>
+          <Field label="状態">
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | TaskStatus)}>
+              <option value="all">すべて</option>
+              {Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </Field>
+        </div>
+      ) : null}
+      {tasks.length > 0 && filteredTasks.length === 0 ? <EmptyState message="条件に一致するタスクはありません。" /> : null}
 
       <div className="table-wrap">
         <table>
@@ -156,7 +195,7 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
             </tr>
           </thead>
           <tbody>
-            {tasks.map((task) => (
+            {filteredTasks.map((task) => (
               <tr key={task.id}>
                 <td>{task.taskName}</td>
                 <td>{task.workerName}</td>

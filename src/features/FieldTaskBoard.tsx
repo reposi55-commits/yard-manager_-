@@ -44,6 +44,18 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
       .sort((a, b) => a.sortRank - b.sortRank || a.task.plannedStartOffsetMin - b.task.plannedStartOffsetMin);
   }, [tasks, links, routes]);
 
+  const groupedViews = useMemo(
+    () =>
+      [
+        { key: "in_progress", title: "作業中", views: views.filter((view) => view.task.status === "in_progress") },
+        { key: "ready", title: "開始可能", views: views.filter((view) => !view.blocked && view.task.status === "ready") },
+        { key: "pending", title: "未開始", views: views.filter((view) => !view.blocked && view.task.status === "pending") },
+        { key: "blocked", title: "前工程待ち", views: views.filter((view) => view.blocked && view.task.status !== "in_progress" && view.task.status !== "completed") },
+        { key: "completed", title: "完了", views: views.filter((view) => view.task.status === "completed") },
+      ].filter((group) => group.views.length > 0),
+    [views],
+  );
+
   async function updateStatus(view: TaskView, status: TaskStatus) {
     if (status === "in_progress") {
       if (view.blocked) return;
@@ -66,22 +78,32 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
       {error ? <p className="alert">{error}</p> : null}
       {views.length === 0 ? <EmptyState message="自分に割り当てられた作業はありません。" /> : null}
       <div className="task-card-list">
-        {views.map((view) => (
-          <button key={view.task.id} type="button" className="task-card" onClick={() => setSelected(view)}>
-            <div className="task-card-top">
-              <div>
-                <p className="task-time">{view.task.plannedStartLabel} - {view.task.plannedEndLabel}</p>
-                <h2>{view.task.taskName}</h2>
-              </div>
-              <StatusBadge type="task" status={view.task.status} blocked={view.blocked} label={view.displayLabel} />
+        {groupedViews.map((group) => (
+          <section className="task-section" key={group.key}>
+            <div className="task-section-header">
+              <h2>{group.title}</h2>
+              <span>{group.views.length}件</span>
             </div>
-            <div className="task-info-grid">
-              <span>レーン</span><strong>{view.task.laneName || "-"}</strong>
-              <span>対象便</span><strong>{view.task.targetMainRouteName} {view.task.targetMainFlightNumber}</strong>
-              <span>前工程</span><strong>{view.blocked ? "未完了のサブ便あり" : "開始条件OK"}</strong>
+            <div className="task-section-list">
+              {group.views.map((view) => (
+                <button key={view.task.id} type="button" className="task-card" onClick={() => setSelected(view)}>
+                  <div className="task-card-top">
+                    <div>
+                      <p className="task-time">{view.task.plannedStartLabel} - {view.task.plannedEndLabel}</p>
+                      <h2>{view.task.taskName}</h2>
+                    </div>
+                    <StatusBadge type="task" status={view.task.status} blocked={view.blocked} label={view.displayLabel} />
+                  </div>
+                  <div className="task-info-grid">
+                    <span>レーン</span><strong>{view.task.laneName || "-"}</strong>
+                    <span>対象便</span><strong>{view.task.targetMainRouteName} {view.task.targetMainFlightNumber}</strong>
+                    <span>前工程</span><strong>{view.blocked ? "未完了のサブ便あり" : "開始条件OK"}</strong>
+                  </div>
+                  {view.task.instruction ? <p className="instruction">{view.task.instruction}</p> : null}
+                </button>
+              ))}
             </div>
-            {view.task.instruction ? <p className="instruction">{view.task.instruction}</p> : null}
-          </button>
+          </section>
         ))}
       </div>
       {selected ? (

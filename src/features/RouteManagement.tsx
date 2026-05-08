@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
@@ -23,9 +23,25 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   const [editing, setEditing] = useState<Route | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
+  const [searchText, setSearchText] = useState("");
+  const [typeFilter, setTypeFilter] = useState<"all" | RouteType>("all");
+  const [statusFilter, setStatusFilter] = useState<"all" | RouteStatus>("all");
   const { stations } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+
+  const filteredRoutes = useMemo(() => {
+    const keyword = searchText.trim().toLowerCase();
+    return routes.filter((route) => {
+      const matchesKeyword =
+        !keyword ||
+        [route.routeName, route.flightNumber, route.stationName]
+          .some((value) => value.toLowerCase().includes(keyword));
+      const matchesType = typeFilter === "all" || route.type === typeFilter;
+      const matchesStatus = statusFilter === "all" || route.status === statusFilter;
+      return matchesKeyword && matchesType && matchesStatus;
+    });
+  }, [routes, searchText, typeFilter, statusFilter]);
 
   function openCreateForm() {
     setDraft(routeDefaults);
@@ -100,7 +116,11 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   }
 
   async function remove(route: Route) {
-    if ((route.actualStartAt || route.actualEndAt) && !window.confirm("実績時刻がある便です。論理削除しても実績は残ります。続行しますか？")) return;
+    const label = `${route.routeName} / ${route.flightNumber}`;
+    const message = route.actualStartAt || route.actualEndAt
+      ? `実績時刻がある便です。\n${label} を論理削除しても実績は残ります。続行しますか？`
+      : `${label} を削除しますか？`;
+    if (!window.confirm(message)) return;
     await softDeleteEntity("routes", route, user);
   }
 
@@ -116,6 +136,27 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
 
       {!formOpen && error ? <p className="alert">{error}</p> : null}
       {routes.length === 0 ? <EmptyState message="この対象日の便はまだありません。" /> : null}
+      {routes.length > 0 ? (
+        <div className="filter-bar">
+          <Field label="検索">
+            <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="便名・便番号・ステーション" />
+          </Field>
+          <Field label="種別">
+            <select value={typeFilter} onChange={(event) => setTypeFilter(event.target.value as "all" | RouteType)}>
+              <option value="all">すべて</option>
+              <option value="main">メイン便</option>
+              <option value="sub">サブ便</option>
+            </select>
+          </Field>
+          <Field label="状態">
+            <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value as "all" | RouteStatus)}>
+              <option value="all">すべて</option>
+              {Object.entries(routeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </Field>
+        </div>
+      ) : null}
+      {routes.length > 0 && filteredRoutes.length === 0 ? <EmptyState message="条件に一致する便はありません。" /> : null}
 
       <div className="table-wrap">
         <table>
@@ -131,7 +172,7 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
             </tr>
           </thead>
           <tbody>
-            {routes.map((route) => (
+            {filteredRoutes.map((route) => (
               <tr key={route.id}>
                 <td>{route.type === "main" ? "メイン" : "サブ"}</td>
                 <td>{route.routeName}</td>

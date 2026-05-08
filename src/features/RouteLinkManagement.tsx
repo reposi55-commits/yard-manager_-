@@ -54,6 +54,12 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
     }
   }
 
+  async function remove(link: RouteLink) {
+    const label = `${link.subRouteName} / ${link.subFlightNumber} → ${link.mainRouteName} / ${link.mainFlightNumber}`;
+    if (!window.confirm(`${label} の紐付けを削除しますか？`)) return;
+    await softDeleteEntity("routeLinks", link, user);
+  }
+
   return (
     <Card>
       <div className="section-header"><div><p className="eyebrow">Links</p><h2>サブ便とメイン便の紐付け</h2></div></div>
@@ -82,7 +88,7 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
               <tr key={link.id}>
                 <td>{link.subRouteName} / {link.subFlightNumber}</td>
                 <td>{link.mainRouteName} / {link.mainFlightNumber}</td>
-                <td><DangerButton type="button" onClick={() => softDeleteEntity("routeLinks", link, user)}>削除</DangerButton></td>
+                <td><DangerButton type="button" onClick={() => remove(link)}>削除</DangerButton></td>
               </tr>
             ))}
           </tbody>

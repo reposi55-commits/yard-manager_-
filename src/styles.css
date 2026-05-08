@@ -232,6 +232,18 @@ button {
   margin-bottom: 18px;
 }
 
+.filter-bar {
+  display: grid;
+  grid-template-columns: minmax(260px, 1.5fr) repeat(2, minmax(180px, 1fr));
+  gap: 14px;
+  align-items: end;
+  padding: 14px;
+  margin-bottom: 16px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
 .form-actions,
 .toolbar,
 .table-actions,
@@ -480,6 +492,39 @@ th {
 
 .task-card-list {
   display: grid;
+  gap: 20px;
+}
+
+.task-section {
+  display: grid;
+  gap: 10px;
+}
+
+.task-section-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+}
+
+.task-section-header h2 {
+  margin: 0;
+  font-size: 1.16rem;
+}
+
+.task-section-header span {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #e9f0f3;
+  color: #40556a;
+  font-weight: 800;
+}
+
+.task-section-list {
+  display: grid;
   gap: 14px;
 }
 
@@ -568,6 +613,10 @@ th {
   }
 
   .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .filter-bar {
     grid-template-columns: 1fr;
   }
 

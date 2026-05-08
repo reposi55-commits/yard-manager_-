@@ -10,6 +10,10 @@ const emptyStation = { name: "", area: "", sortOrder: 0, active: true };
 const emptyLane = { name: "", area: "", adjacentLaneIds: "", sortOrder: 0, active: true };
 const emptyWorker = { name: "", displayName: "", active: true };
 
+function confirmDelete(label: string): boolean {
+  return window.confirm(`${label} を削除しますか？`);
+}
+
 export function MasterManagement({ kind, user }: { kind: MasterKind; user: AppUser }) {
   const [stations, setStations] = useState<Station[]>([]);
   const [lanes, setLanes] = useState<Lane[]>([]);
@@ -86,7 +90,7 @@ function StationEditor({ user, items }: { user: AppUser; items: Station[] }) {
                 <td>{item.name}</td><td>{item.area}</td><td>{item.sortOrder}</td><td>{item.active ? "有効" : "無効"}</td>
                 <td className="table-actions">
                   <SecondaryButton type="button" onClick={() => { setEditing(item); setDraft({ name: item.name, area: item.area, sortOrder: item.sortOrder, active: item.active }); }}>編集</SecondaryButton>
-                  <DangerButton type="button" onClick={() => softDeleteEntity("stations", item, user)}>削除</DangerButton>
+                  <DangerButton type="button" onClick={() => { if (confirmDelete(item.name)) void softDeleteEntity("stations", item, user); }}>削除</DangerButton>
                 </td>
               </tr>
             ))}
@@ -143,7 +147,7 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
                 <td>{item.name}</td><td>{item.area}</td><td>{item.adjacentLaneIds.join(", ") || "-"}</td><td>{item.sortOrder}</td><td>{item.active ? "有効" : "無効"}</td>
                 <td className="table-actions">
                   <SecondaryButton type="button" onClick={() => { setEditing(item); setDraft({ name: item.name, area: item.area, adjacentLaneIds: item.adjacentLaneIds.join(", "), sortOrder: item.sortOrder, active: item.active }); }}>編集</SecondaryButton>
-                  <DangerButton type="button" onClick={() => softDeleteEntity("lanes", item, user)}>削除</DangerButton>
+                  <DangerButton type="button" onClick={() => { if (confirmDelete(item.name)) void softDeleteEntity("lanes", item, user); }}>削除</DangerButton>
                 </td>
               </tr>
             ))}
@@ -193,7 +197,7 @@ function WorkerEditor({ user, items }: { user: AppUser; items: Worker[] }) {
                 <td><code>{item.id}</code></td><td>{item.name}</td><td>{item.displayName}</td><td>{item.active ? "有効" : "無効"}</td>
                 <td className="table-actions">
                   <SecondaryButton type="button" onClick={() => { setEditing(item); setDraft({ name: item.name, displayName: item.displayName, active: item.active }); }}>編集</SecondaryButton>
-                  <DangerButton type="button" onClick={() => softDeleteEntity("workers", item, user)}>削除</DangerButton>
+                  <DangerButton type="button" onClick={() => { if (confirmDelete(item.displayName || item.name)) void softDeleteEntity("workers", item, user); }}>削除</DangerButton>
                 </td>
               </tr>
             ))}
