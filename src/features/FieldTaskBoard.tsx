@@ -100,6 +100,11 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
                     <span>対象便</span><strong>{view.task.targetMainRouteName} {view.task.targetMainFlightNumber}</strong>
                     <span>前工程</span><strong>{view.blocked ? "未完了のサブ便あり" : "開始条件OK"}</strong>
                   </div>
+                  {view.task.actualStartAt || view.task.actualEndAt ? (
+                    <p className="task-actual-line">
+                      開始 {formatTimeOnly(view.task.actualStartAt)} / 完了 {formatTimeOnly(view.task.actualEndAt)}
+                    </p>
+                  ) : null}
                   {view.task.instruction ? <p className="instruction">{view.task.instruction}</p> : null}
                 </button>
               ))}
@@ -158,4 +163,10 @@ function getSortRank(task: Task, blocked: boolean): number {
   if (!blocked && task.status === "pending") return 3;
   if (blocked) return 4;
   return 5;
+}
+
+function formatTimeOnly(value: Task["actualStartAt"]): string {
+  const timestamp = formatTimestamp(value);
+  if (timestamp === "-") return "-";
+  return timestamp.split(" ")[1] || timestamp;
 }
