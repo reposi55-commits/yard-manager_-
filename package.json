@@ -8,6 +8,8 @@
     "build": "tsc -b && vite build",
     "lint": "tsc --noEmit",
     "preview": "vite preview --host=0.0.0.0",
+    "seed:masters": "node scripts/seedMasters.mjs",
+    "seed:demo": "node scripts/seedMasters.mjs",
     "deploy": "npx firebase-tools deploy --project new-yard-kanri --only hosting,firestore:rules,firestore:indexes",
     "deploy:hosting": "npx firebase-tools deploy --project new-yard-kanri --only hosting"
   },
