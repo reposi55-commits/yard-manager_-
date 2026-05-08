@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Card, DangerButton, EmptyState, Field, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
 import { labelToOffsetMin } from "../utils/date";
@@ -21,10 +21,41 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   const [routes, setRoutes] = useState<Route[]>([]);
   const [draft, setDraft] = useState(routeDefaults);
   const [editing, setEditing] = useState<Route | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
   const { stations } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+
+  function openCreateForm() {
+    setDraft(routeDefaults);
+    setEditing(null);
+    setError("");
+    setFormOpen(true);
+  }
+
+  function openEditForm(route: Route) {
+    setEditing(route);
+    setDraft({
+      type: route.type,
+      routeName: route.routeName,
+      flightNumber: route.flightNumber,
+      stationId: route.stationId,
+      stationName: route.stationName,
+      plannedStartLabel: route.plannedStartLabel,
+      plannedEndLabel: route.plannedEndLabel,
+      status: route.status,
+    });
+    setError("");
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditing(null);
+    setDraft(routeDefaults);
+    setError("");
+  }
 
   function applyStation(stationId: string) {
     const station = stations.find((item) => item.id === stationId);
@@ -38,12 +69,14 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       setError("便名、便番号、ステーション、予定時刻は必須です。");
       return;
     }
+
     const plannedStartOffsetMin = labelToOffsetMin(draft.plannedStartLabel);
     const plannedEndOffsetMin = labelToOffsetMin(draft.plannedEndLabel);
     if (plannedEndOffsetMin <= plannedStartOffsetMin) {
       setError("予定終了は予定開始より後の時刻にしてください。");
       return;
     }
+
     const payload = {
       ...draft,
       routeName,
@@ -53,15 +86,14 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       plannedStartOffsetMin,
       plannedEndOffsetMin,
     };
+
     try {
       if (editing) {
         await updateEntity("routes", editing, payload, user);
-        setEditing(null);
       } else {
         await createEntity("routes", payload, user);
       }
-      setDraft(routeDefaults);
-      setError("");
+      closeForm();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "便の保存に失敗しました。");
     }
@@ -75,40 +107,29 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   return (
     <Card>
       <div className="section-header">
-        <div><p className="eyebrow">Routes</p><h2>便管理</h2></div>
-      </div>
-      {error ? <p className="alert">{error}</p> : null}
-      <div className="form-grid inline-form">
-        <Field label="種別">
-          <select value={draft.type} onChange={(e) => setDraft({ ...draft, type: e.target.value as RouteType })}>
-            <option value="main">メイン便</option>
-            <option value="sub">サブ便</option>
-          </select>
-        </Field>
-        <Field label="便名"><input value={draft.routeName} onChange={(e) => setDraft({ ...draft, routeName: e.target.value })} /></Field>
-        <Field label="便番号"><input value={draft.flightNumber} onChange={(e) => setDraft({ ...draft, flightNumber: e.target.value })} /></Field>
-        <Field label="ステーション">
-          <select value={draft.stationId} onChange={(e) => applyStation(e.target.value)}>
-            <option value="">選択</option>
-            {stations.map((station: Station) => <option key={station.id} value={station.id}>{station.area} / {station.name}</option>)}
-          </select>
-        </Field>
-        <Field label="予定開始"><input type="time" value={draft.plannedStartLabel} onChange={(e) => setDraft({ ...draft, plannedStartLabel: e.target.value })} /></Field>
-        <Field label="予定終了"><input type="time" value={draft.plannedEndLabel} onChange={(e) => setDraft({ ...draft, plannedEndLabel: e.target.value })} /></Field>
-        <Field label="状態">
-          <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as RouteStatus })}>
-            {Object.entries(routeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </Field>
-        <div className="form-actions">
-          <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
-          {editing ? <SecondaryButton type="button" onClick={() => { setEditing(null); setDraft(routeDefaults); }}>キャンセル</SecondaryButton> : null}
+        <div>
+          <p className="eyebrow">Routes</p>
+          <h2>便管理</h2>
         </div>
+        <PrimaryButton type="button" onClick={openCreateForm}>新規追加</PrimaryButton>
       </div>
+
+      {!formOpen && error ? <p className="alert">{error}</p> : null}
       {routes.length === 0 ? <EmptyState message="この対象日の便はまだありません。" /> : null}
+
       <div className="table-wrap">
         <table>
-          <thead><tr><th>種別</th><th>便名</th><th>便番号</th><th>ステーション</th><th>予定</th><th>状態</th><th>操作</th></tr></thead>
+          <thead>
+            <tr>
+              <th>種別</th>
+              <th>便名</th>
+              <th>便番号</th>
+              <th>ステーション</th>
+              <th>予定</th>
+              <th>状態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
           <tbody>
             {routes.map((route) => (
               <tr key={route.id}>
@@ -119,7 +140,7 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
                 <td>{route.plannedStartLabel} - {route.plannedEndLabel}</td>
                 <td><StatusBadge type="route" status={route.status} /></td>
                 <td className="table-actions">
-                  <SecondaryButton type="button" onClick={() => { setEditing(route); setDraft({ type: route.type, routeName: route.routeName, flightNumber: route.flightNumber, stationId: route.stationId, stationName: route.stationName, plannedStartLabel: route.plannedStartLabel, plannedEndLabel: route.plannedEndLabel, status: route.status }); }}>編集</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => openEditForm(route)}>編集</SecondaryButton>
                   <DangerButton type="button" onClick={() => remove(route)}>削除</DangerButton>
                 </td>
               </tr>
@@ -127,6 +148,52 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
           </tbody>
         </table>
       </div>
+
+      {formOpen ? (
+        <Modal
+          title={editing ? "便を編集" : "便を追加"}
+          onClose={closeForm}
+          footer={
+            <>
+              <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+              <SecondaryButton type="button" onClick={closeForm}>キャンセル</SecondaryButton>
+            </>
+          }
+        >
+          {error ? <p className="alert">{error}</p> : null}
+          <div className="form-grid">
+            <Field label="種別">
+              <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as RouteType })}>
+                <option value="main">メイン便</option>
+                <option value="sub">サブ便</option>
+              </select>
+            </Field>
+            <Field label="便名">
+              <input value={draft.routeName} onChange={(event) => setDraft({ ...draft, routeName: event.target.value })} />
+            </Field>
+            <Field label="便番号">
+              <input value={draft.flightNumber} onChange={(event) => setDraft({ ...draft, flightNumber: event.target.value })} />
+            </Field>
+            <Field label="ステーション">
+              <select value={draft.stationId} onChange={(event) => applyStation(event.target.value)}>
+                <option value="">選択</option>
+                {stations.map((station: Station) => <option key={station.id} value={station.id}>{station.area} / {station.name}</option>)}
+              </select>
+            </Field>
+            <Field label="予定開始">
+              <input type="time" value={draft.plannedStartLabel} onChange={(event) => setDraft({ ...draft, plannedStartLabel: event.target.value })} />
+            </Field>
+            <Field label="予定終了">
+              <input type="time" value={draft.plannedEndLabel} onChange={(event) => setDraft({ ...draft, plannedEndLabel: event.target.value })} />
+            </Field>
+            <Field label="状態">
+              <select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as RouteStatus })}>
+                {Object.entries(routeStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </Field>
+          </div>
+        </Modal>
+      ) : null}
     </Card>
   );
 }

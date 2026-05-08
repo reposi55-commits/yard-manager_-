@@ -2,8 +2,9 @@ import { useEffect, useMemo, useState } from "react";
 import { where } from "firebase/firestore";
 import { Card, EmptyState } from "../components/ui";
 import { subscribeCollection } from "../services/firestoreService";
-import type { AppUser, LogAction, LogTargetType, OperationLog } from "../types";
+import type { AppUser, LogAction, LogTargetType, OperationLog, RouteStatus, TaskStatus } from "../types";
 import { formatTimestamp } from "../utils/date";
+import { routeStatusLabels, taskStatusLabels } from "../utils/status";
 
 const targetLabels: Record<LogTargetType, string> = {
   station: "ステーション",
@@ -66,7 +67,10 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
             {sortedLogs.map((log) => (
               <tr key={log.id}>
                 <td>{formatTimestamp(log.operatedAt)}</td>
-                <td>{targetLabels[log.targetType] || log.targetType}</td>
+                <td>
+                  <span>{targetLabels[log.targetType] || log.targetType}</span>
+                  <small className="muted-id">{log.targetId}</small>
+                </td>
                 <td>{actionLabels[log.action] || log.action}</td>
                 <td><code>{log.operatedBy}</code></td>
                 <td>{summarizeChange(log)}</td>
@@ -81,11 +85,34 @@ export function OperationLogView({ user, businessDate }: { user: AppUser; busine
 
 function summarizeChange(log: OperationLog): string {
   if (log.action === "status_change") {
-    const beforeStatus = log.before?.status ? String(log.before.status) : "-";
-    const afterStatus = log.after?.status ? String(log.after.status) : "-";
-    return `${beforeStatus} → ${afterStatus}`;
+    const beforeStatus = getStatusLabel(log.targetType, log.before?.status);
+    const afterStatus = getStatusLabel(log.targetType, log.after?.status);
+    const actualTimeNote = summarizeActualTimeChange(log);
+    return actualTimeNote ? `${beforeStatus} → ${afterStatus} / ${actualTimeNote}` : `${beforeStatus} → ${afterStatus}`;
   }
   if (log.action === "create") return "新規作成";
   if (log.action === "delete") return "論理削除";
   return "内容更新";
+}
+
+function getStatusLabel(targetType: LogTargetType, value: unknown): string {
+  if (typeof value !== "string") return "-";
+  if (targetType === "route" && value in routeStatusLabels) {
+    return routeStatusLabels[value as RouteStatus];
+  }
+  if (targetType === "task" && value in taskStatusLabels) {
+    return taskStatusLabels[value as TaskStatus];
+  }
+  return value;
+}
+
+function summarizeActualTimeChange(log: OperationLog): string {
+  const beforeStart = Boolean(log.before?.actualStartAt);
+  const afterStart = Boolean(log.after?.actualStartAt);
+  const beforeEnd = Boolean(log.before?.actualEndAt);
+  const afterEnd = Boolean(log.after?.actualEndAt);
+
+  if (!beforeStart && afterStart) return "開始実績を記録";
+  if (!beforeEnd && afterEnd) return "完了実績を記録";
+  return "";
 }

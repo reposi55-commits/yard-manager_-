@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, DangerButton, EmptyState, Field, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Lane, Route, Task, TaskStatus, Worker } from "../types";
 import { labelToOffsetMin } from "../utils/date";
@@ -26,12 +26,47 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
   const [routes, setRoutes] = useState<Route[]>([]);
   const [draft, setDraft] = useState(taskDefaults);
   const [editing, setEditing] = useState<Task | null>(null);
+  const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
   const { lanes, workers } = useMasterOptions(user);
   const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
 
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+
+  function openCreateForm() {
+    setDraft(taskDefaults);
+    setEditing(null);
+    setError("");
+    setFormOpen(true);
+  }
+
+  function openEditForm(task: Task) {
+    setEditing(task);
+    setDraft({
+      taskName: task.taskName,
+      workerId: task.workerId,
+      workerName: task.workerName,
+      laneId: task.laneId,
+      laneName: task.laneName,
+      targetMainRouteId: task.targetMainRouteId,
+      targetMainRouteName: task.targetMainRouteName,
+      targetMainFlightNumber: task.targetMainFlightNumber,
+      instruction: task.instruction,
+      plannedStartLabel: task.plannedStartLabel,
+      plannedEndLabel: task.plannedEndLabel,
+      status: task.status,
+    });
+    setError("");
+    setFormOpen(true);
+  }
+
+  function closeForm() {
+    setFormOpen(false);
+    setEditing(null);
+    setDraft(taskDefaults);
+    setError("");
+  }
 
   function applyWorker(workerId: string) {
     const worker = workers.find((item) => item.id === workerId);
@@ -45,7 +80,12 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
 
   function applyMainRoute(targetMainRouteId: string) {
     const route = mainRoutes.find((item) => item.id === targetMainRouteId);
-    setDraft({ ...draft, targetMainRouteId, targetMainRouteName: route?.routeName || "", targetMainFlightNumber: route?.flightNumber || "" });
+    setDraft({
+      ...draft,
+      targetMainRouteId,
+      targetMainRouteName: route?.routeName || "",
+      targetMainFlightNumber: route?.flightNumber || "",
+    });
   }
 
   async function save() {
@@ -54,12 +94,14 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       setError("タスク名、作業員、レーン、対象メイン便、予定時刻は必須です。");
       return;
     }
+
     const plannedStartOffsetMin = labelToOffsetMin(draft.plannedStartLabel);
     const plannedEndOffsetMin = labelToOffsetMin(draft.plannedEndLabel);
     if (plannedEndOffsetMin <= plannedStartOffsetMin) {
       setError("予定終了は予定開始より後の時刻にしてください。");
       return;
     }
+
     const payload = {
       ...draft,
       taskName,
@@ -69,15 +111,14 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       plannedStartOffsetMin,
       plannedEndOffsetMin,
     };
+
     try {
       if (editing) {
         await updateEntity("tasks", editing, payload, user);
-        setEditing(null);
       } else {
         await createEntity("tasks", payload, user);
       }
-      setDraft(taskDefaults);
-      setError("");
+      closeForm();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "タスクの保存に失敗しました。");
     }
@@ -90,45 +131,30 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
 
   return (
     <Card>
-      <div className="section-header"><div><p className="eyebrow">Tasks</p><h2>タスク管理</h2></div></div>
-      {error ? <p className="alert">{error}</p> : null}
-      <div className="form-grid inline-form">
-        <Field label="タスク名"><input value={draft.taskName} onChange={(e) => setDraft({ ...draft, taskName: e.target.value })} /></Field>
-        <Field label="作業員">
-          <select value={draft.workerId} onChange={(e) => applyWorker(e.target.value)}>
-            <option value="">選択</option>
-            {workers.map((worker: Worker) => <option key={worker.id} value={worker.id}>{worker.displayName || worker.name}</option>)}
-          </select>
-        </Field>
-        <Field label="レーン">
-          <select value={draft.laneId} onChange={(e) => applyLane(e.target.value)}>
-            <option value="">選択</option>
-            {lanes.map((lane: Lane) => <option key={lane.id} value={lane.id}>{lane.area} / {lane.name}</option>)}
-          </select>
-        </Field>
-        <Field label="対象メイン便">
-          <select value={draft.targetMainRouteId} onChange={(e) => applyMainRoute(e.target.value)}>
-            <option value="">選択</option>
-            {mainRoutes.map((route) => <option key={route.id} value={route.id}>{route.routeName} / {route.flightNumber}</option>)}
-          </select>
-        </Field>
-        <Field label="予定開始"><input type="time" value={draft.plannedStartLabel} onChange={(e) => setDraft({ ...draft, plannedStartLabel: e.target.value })} /></Field>
-        <Field label="予定終了"><input type="time" value={draft.plannedEndLabel} onChange={(e) => setDraft({ ...draft, plannedEndLabel: e.target.value })} /></Field>
-        <Field label="状態">
-          <select value={draft.status} onChange={(e) => setDraft({ ...draft, status: e.target.value as TaskStatus })}>
-            {Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
-        </Field>
-        <Field label="補足指示"><textarea value={draft.instruction} onChange={(e) => setDraft({ ...draft, instruction: e.target.value })} /></Field>
-        <div className="form-actions">
-          <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
-          {editing ? <SecondaryButton type="button" onClick={() => { setEditing(null); setDraft(taskDefaults); }}>キャンセル</SecondaryButton> : null}
+      <div className="section-header">
+        <div>
+          <p className="eyebrow">Tasks</p>
+          <h2>タスク管理</h2>
         </div>
+        <PrimaryButton type="button" onClick={openCreateForm}>新規追加</PrimaryButton>
       </div>
+
+      {!formOpen && error ? <p className="alert">{error}</p> : null}
       {tasks.length === 0 ? <EmptyState message="この対象日のタスクはまだありません。" /> : null}
+
       <div className="table-wrap">
         <table>
-          <thead><tr><th>タスク</th><th>作業員</th><th>レーン</th><th>対象便</th><th>予定</th><th>状態</th><th>操作</th></tr></thead>
+          <thead>
+            <tr>
+              <th>タスク</th>
+              <th>作業員</th>
+              <th>レーン</th>
+              <th>対象便</th>
+              <th>予定</th>
+              <th>状態</th>
+              <th>操作</th>
+            </tr>
+          </thead>
           <tbody>
             {tasks.map((task) => (
               <tr key={task.id}>
@@ -139,7 +165,7 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
                 <td>{task.plannedStartLabel} - {task.plannedEndLabel}</td>
                 <td><StatusBadge type="task" status={task.status} /></td>
                 <td className="table-actions">
-                  <SecondaryButton type="button" onClick={() => { setEditing(task); setDraft({ taskName: task.taskName, workerId: task.workerId, workerName: task.workerName, laneId: task.laneId, laneName: task.laneName, targetMainRouteId: task.targetMainRouteId, targetMainRouteName: task.targetMainRouteName, targetMainFlightNumber: task.targetMainFlightNumber, instruction: task.instruction, plannedStartLabel: task.plannedStartLabel, plannedEndLabel: task.plannedEndLabel, status: task.status }); }}>編集</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => openEditForm(task)}>編集</SecondaryButton>
                   <DangerButton type="button" onClick={() => remove(task)}>削除</DangerButton>
                 </td>
               </tr>
@@ -147,6 +173,58 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
           </tbody>
         </table>
       </div>
+
+      {formOpen ? (
+        <Modal
+          title={editing ? "タスクを編集" : "タスクを追加"}
+          onClose={closeForm}
+          footer={
+            <>
+              <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+              <SecondaryButton type="button" onClick={closeForm}>キャンセル</SecondaryButton>
+            </>
+          }
+        >
+          {error ? <p className="alert">{error}</p> : null}
+          <div className="form-grid">
+            <Field label="タスク名">
+              <input value={draft.taskName} onChange={(event) => setDraft({ ...draft, taskName: event.target.value })} />
+            </Field>
+            <Field label="作業員">
+              <select value={draft.workerId} onChange={(event) => applyWorker(event.target.value)}>
+                <option value="">選択</option>
+                {workers.map((worker: Worker) => <option key={worker.id} value={worker.id}>{worker.displayName || worker.name}</option>)}
+              </select>
+            </Field>
+            <Field label="レーン">
+              <select value={draft.laneId} onChange={(event) => applyLane(event.target.value)}>
+                <option value="">選択</option>
+                {lanes.map((lane: Lane) => <option key={lane.id} value={lane.id}>{lane.area} / {lane.name}</option>)}
+              </select>
+            </Field>
+            <Field label="対象メイン便">
+              <select value={draft.targetMainRouteId} onChange={(event) => applyMainRoute(event.target.value)}>
+                <option value="">選択</option>
+                {mainRoutes.map((route) => <option key={route.id} value={route.id}>{route.routeName} / {route.flightNumber}</option>)}
+              </select>
+            </Field>
+            <Field label="予定開始">
+              <input type="time" value={draft.plannedStartLabel} onChange={(event) => setDraft({ ...draft, plannedStartLabel: event.target.value })} />
+            </Field>
+            <Field label="予定終了">
+              <input type="time" value={draft.plannedEndLabel} onChange={(event) => setDraft({ ...draft, plannedEndLabel: event.target.value })} />
+            </Field>
+            <Field label="状態">
+              <select value={draft.status} onChange={(event) => setDraft({ ...draft, status: event.target.value as TaskStatus })}>
+                {Object.entries(taskStatusLabels).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+              </select>
+            </Field>
+            <Field label="補足指示">
+              <textarea value={draft.instruction} onChange={(event) => setDraft({ ...draft, instruction: event.target.value })} />
+            </Field>
+          </div>
+        </Modal>
+      ) : null}
     </Card>
   );
 }
