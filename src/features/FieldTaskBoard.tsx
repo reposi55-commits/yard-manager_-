@@ -3,6 +3,7 @@ import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } 
 import { changeTaskStatus, subscribeDaily, subscribeWorkerTasks } from "../services/firestoreService";
 import type { AppUser, Route, RouteLink, Task, TaskStatus } from "../types";
 import { formatTimestamp, isBeforePlannedStart } from "../utils/date";
+import { routeStatusLabels } from "../utils/status";
 
 type TaskView = {
   task: Task;
@@ -129,7 +130,12 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
             <div><span>ステータス</span><StatusBadge type="task" status={selected.task.status} blocked={selected.blocked} label={selected.displayLabel} /></div>
             <div><span>開始実績</span><strong>{formatTimestamp(selected.task.actualStartAt)}</strong></div>
             <div><span>完了実績</span><strong>{formatTimestamp(selected.task.actualEndAt)}</strong></div>
-            {selected.subRoutes.length > 0 ? <div><span>関連サブ便</span><strong>{selected.subRoutes.map((route) => `${route.routeName}:${route.status}`).join(" / ")}</strong></div> : null}
+            {selected.subRoutes.length > 0 ? (
+              <div>
+                <span>関連サブ便</span>
+                <strong>{selected.subRoutes.map((route) => `${route.routeName}:${routeStatusLabels[route.status]}`).join(" / ")}</strong>
+              </div>
+            ) : null}
             {selected.task.instruction ? <p className="instruction detail-instruction">{selected.task.instruction}</p> : null}
           </div>
         </Modal>

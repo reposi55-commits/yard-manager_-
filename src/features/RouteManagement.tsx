@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
-import { labelToOffsetMin } from "../utils/date";
+import { formatTimestamp, labelToOffsetMin } from "../utils/date";
 import { routeStatusLabels } from "../utils/status";
 import { useMasterOptions } from "./MasterManagement";
 
@@ -98,6 +98,17 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       return;
     }
 
+    const warnings = buildRouteWarnings(routes, editing?.id, {
+      routeName,
+      flightNumber,
+      stationId: draft.stationId,
+      plannedStartOffsetMin,
+      plannedEndOffsetMin,
+    });
+    if (warnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${warnings.join("\n")}\n\nこのまま保存しますか？`)) {
+      return;
+    }
+
     const payload = {
       ...draft,
       routeName,
@@ -172,6 +183,7 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
               <th>便番号</th>
               <th>ステーション</th>
               <th>予定</th>
+              <th>実績</th>
               <th>状態</th>
               <th>操作</th>
             </tr>
@@ -184,6 +196,10 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
                 <td>{route.flightNumber}</td>
                 <td>{route.stationName}</td>
                 <td>{route.plannedStartLabel} - {route.plannedEndLabel}</td>
+                <td className="actual-times">
+                  <span>開始 {formatTimestamp(route.actualStartAt)}</span>
+                  <span>完了 {formatTimestamp(route.actualEndAt)}</span>
+                </td>
                 <td><StatusBadge type="route" status={route.status} /></td>
                 <td className="table-actions">
                   <SecondaryButton type="button" onClick={() => openEditForm(route)}>編集</SecondaryButton>
@@ -246,4 +262,37 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       ) : null}
     </Card>
   );
+}
+
+function buildRouteWarnings(
+  routes: Route[],
+  editingId: string | undefined,
+  draft: {
+    routeName: string;
+    flightNumber: string;
+    stationId: string;
+    plannedStartOffsetMin: number;
+    plannedEndOffsetMin: number;
+  },
+): string[] {
+  const targets = routes.filter((route) => route.id !== editingId);
+  const warnings: string[] = [];
+  const duplicateFlight = targets.find((route) => route.flightNumber === draft.flightNumber);
+  const stationOverlap = targets.find(
+    (route) =>
+      route.stationId === draft.stationId &&
+      rangesOverlap(draft.plannedStartOffsetMin, draft.plannedEndOffsetMin, route.plannedStartOffsetMin, route.plannedEndOffsetMin),
+  );
+
+  if (duplicateFlight) {
+    warnings.push(`同じ便番号の便があります: ${duplicateFlight.routeName} / ${duplicateFlight.flightNumber}`);
+  }
+  if (stationOverlap) {
+    warnings.push(`同じステーションで予定時間が重なっています: ${stationOverlap.routeName} / ${stationOverlap.flightNumber}`);
+  }
+  return warnings;
+}
+
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
+  return startA < endB && startB < endA;
 }

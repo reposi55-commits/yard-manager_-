@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Lane, Route, Task, TaskStatus, Worker } from "../types";
-import { labelToOffsetMin } from "../utils/date";
+import { formatTimestamp, labelToOffsetMin } from "../utils/date";
 import { taskStatusLabels } from "../utils/status";
 import { useMasterOptions } from "./MasterManagement";
 
@@ -125,6 +125,18 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       return;
     }
 
+    const warnings = buildTaskWarnings(tasks, editing?.id, {
+      taskName,
+      workerId: draft.workerId,
+      laneId: draft.laneId,
+      targetMainRouteId: draft.targetMainRouteId,
+      plannedStartOffsetMin,
+      plannedEndOffsetMin,
+    });
+    if (warnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${warnings.join("\n")}\n\nこのまま保存しますか？`)) {
+      return;
+    }
+
     const payload = {
       ...draft,
       taskName,
@@ -198,6 +210,7 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
               <th>レーン</th>
               <th>対象便</th>
               <th>予定</th>
+              <th>実績</th>
               <th>状態</th>
               <th>操作</th>
             </tr>
@@ -210,6 +223,10 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
                 <td>{task.laneName}</td>
                 <td>{task.targetMainRouteName} {task.targetMainFlightNumber}</td>
                 <td>{task.plannedStartLabel} - {task.plannedEndLabel}</td>
+                <td className="actual-times">
+                  <span>開始 {formatTimestamp(task.actualStartAt)}</span>
+                  <span>完了 {formatTimestamp(task.actualEndAt)}</span>
+                </td>
                 <td><StatusBadge type="task" status={task.status} /></td>
                 <td className="table-actions">
                   <SecondaryButton type="button" onClick={() => openEditForm(task)}>編集</SecondaryButton>
@@ -282,4 +299,48 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       ) : null}
     </Card>
   );
+}
+
+function buildTaskWarnings(
+  tasks: Task[],
+  editingId: string | undefined,
+  draft: {
+    taskName: string;
+    workerId: string;
+    laneId: string;
+    targetMainRouteId: string;
+    plannedStartOffsetMin: number;
+    plannedEndOffsetMin: number;
+  },
+): string[] {
+  const targets = tasks.filter((task) => task.id !== editingId);
+  const warnings: string[] = [];
+  const workerOverlap = targets.find(
+    (task) =>
+      task.workerId === draft.workerId &&
+      rangesOverlap(draft.plannedStartOffsetMin, draft.plannedEndOffsetMin, task.plannedStartOffsetMin, task.plannedEndOffsetMin),
+  );
+  const laneOverlap = targets.find(
+    (task) =>
+      task.laneId === draft.laneId &&
+      rangesOverlap(draft.plannedStartOffsetMin, draft.plannedEndOffsetMin, task.plannedStartOffsetMin, task.plannedEndOffsetMin),
+  );
+  const duplicateTask = targets.find(
+    (task) => task.targetMainRouteId === draft.targetMainRouteId && task.taskName === draft.taskName,
+  );
+
+  if (workerOverlap) {
+    warnings.push(`同じ作業員の予定時間が重なっています: ${workerOverlap.taskName}`);
+  }
+  if (laneOverlap) {
+    warnings.push(`同じレーンの予定時間が重なっています: ${laneOverlap.taskName}`);
+  }
+  if (duplicateTask) {
+    warnings.push(`同じ対象便に同名タスクがあります: ${duplicateTask.taskName}`);
+  }
+  return warnings;
+}
+
+function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
+  return startA < endB && startB < endA;
 }

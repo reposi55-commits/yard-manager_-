@@ -295,6 +295,15 @@ td {
   word-break: break-all;
 }
 
+.actual-times {
+  min-width: 170px;
+}
+
+.actual-times span {
+  display: block;
+  white-space: nowrap;
+}
+
 th {
   color: #42576c;
   background: #f4f7f9;
