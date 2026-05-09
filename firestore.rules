@@ -104,12 +104,28 @@ service cloud.firestore {
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["email", "displayName", "role", "active", "workerId", "updatedAt", "updatedBy"]);
     }
 
+    function validUserProfileCreate() {
+      return isAdmin()
+        && request.resource.data.keys().hasOnly(["siteId", "businessDate", "email", "displayName", "role", "active", "workerId", "createdAt", "createdBy", "updatedAt", "updatedBy", "deleted"])
+        && request.resource.data.siteId == userDoc().data.siteId
+        && request.resource.data.businessDate == "global"
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ["admin", "user"]
+        && request.resource.data.active is bool
+        && request.resource.data.deleted == false
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && (request.resource.data.role == "admin" || request.resource.data.workerId is string)
+        && (request.resource.data.role == "user" || !("workerId" in request.resource.data));
+    }
+
     match /users/{userId} {
       allow read: if (signedIn() && request.auth.uid == userId)
         || (isAdmin() && resource.data.siteId == userDoc().data.siteId);
-      allow create: if isAdmin() && request.resource.data.siteId == userDoc().data.siteId;
+      allow create: if validUserProfileCreate();
       allow update: if adminUserProfileUpdate();
-      allow delete: if isAdmin() && resource.data.siteId == userDoc().data.siteId;
+      allow delete: if false;
     }
 
     match /operationLogs/{logId} {
