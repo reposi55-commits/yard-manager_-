@@ -102,7 +102,7 @@ button {
 }
 
 .main-nav button {
-  min-height: 44px;
+  min-height: 48px;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -180,8 +180,8 @@ button {
 }
 
 .icon-button {
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   border: 1px solid #c8d4dc;
   border-radius: 8px;
   background: #ffffff;
@@ -646,6 +646,7 @@ th {
 .task-card h2 {
   margin: 2px 0 0;
   font-size: 1.25rem;
+  overflow-wrap: anywhere;
 }
 
 .task-time {
@@ -666,6 +667,11 @@ th {
   font-weight: 700;
 }
 
+.task-info-grid strong,
+.detail-list strong {
+  overflow-wrap: anywhere;
+}
+
 .task-actual-line {
   margin: 0;
   padding: 10px 12px;
@@ -683,6 +689,7 @@ th {
   background: #fff7e8;
   border: 1px solid #efd8a8;
   font-weight: 700;
+  overflow-wrap: anywhere;
 }
 
 .detail-instruction {

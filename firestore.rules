@@ -49,6 +49,18 @@ service cloud.firestore {
         && statusOnlyUpdate();
     }
 
+    function targetTask() {
+      return get(/databases/$(database)/documents/tasks/$(request.resource.data.targetId));
+    }
+
+    function logMatchesCurrentTask() {
+      return exists(/databases/$(database)/documents/tasks/$(request.resource.data.targetId))
+        && targetTask().data.siteId == userDoc().data.siteId
+        && targetTask().data.businessDate == request.resource.data.businessDate
+        && targetTask().data.workerId == userDoc().data.workerId
+        && targetTask().data.status == request.resource.data.after.status;
+    }
+
     function adminSameSiteCreate() {
       return isAdmin() && sameSiteRequest();
     }
@@ -67,12 +79,19 @@ service cloud.firestore {
 
     function userTaskStatusLog() {
       return userDoc().data.role == "user"
+        && request.resource.data.keys().hasOnly(["siteId", "businessDate", "targetType", "targetId", "targetLabel", "action", "before", "after", "operatedBy", "operatedAt"])
         && request.resource.data.targetType == "task"
         && request.resource.data.action == "status_change"
+        && request.resource.data.before is map
+        && request.resource.data.after is map
+        && request.resource.data.operatedAt is timestamp
+        && request.resource.data.targetId == request.resource.data.before.id
+        && request.resource.data.targetId == request.resource.data.after.id
         && request.resource.data.before.workerId == userDoc().data.workerId
         && request.resource.data.after.workerId == userDoc().data.workerId
         && request.resource.data.before.siteId == userDoc().data.siteId
-        && request.resource.data.after.siteId == userDoc().data.siteId;
+        && request.resource.data.after.siteId == userDoc().data.siteId
+        && logMatchesCurrentTask();
     }
 
     match /users/{userId} {

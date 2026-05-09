@@ -177,6 +177,18 @@ Hostingだけ反映:
 npm.cmd run deploy:hosting
 ```
 
+Firestore Security Rulesだけ反映:
+
+```powershell
+npm.cmd run deploy:rules
+```
+
+PowerShellで`firebase deploy --only hosting`を直接実行して`firebase.ps1`の実行ポリシーエラーが出る場合は、`.cmd`版を使ってください。
+
+```powershell
+firebase.cmd deploy --only hosting
+```
+
 ## Phase 1確認シナリオ
 
 ### 1. ログイン・権限

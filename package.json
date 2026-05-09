@@ -11,7 +11,8 @@
     "seed:masters": "node scripts/seedMasters.mjs",
     "seed:demo": "node scripts/seedMasters.mjs",
     "deploy": "npx firebase-tools deploy --project new-yard-kanri --only hosting,firestore:rules,firestore:indexes",
-    "deploy:hosting": "npx firebase-tools deploy --project new-yard-kanri --only hosting"
+    "deploy:hosting": "npx firebase-tools deploy --project new-yard-kanri --only hosting",
+    "deploy:rules": "npx firebase-tools deploy --project new-yard-kanri --only firestore:rules"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.4",
