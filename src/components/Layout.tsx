@@ -1,9 +1,9 @@
-import { BarChart3, CalendarDays, ClipboardList, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, UserCog, Users } from "lucide-react";
+import { BarChart3, CalendarDays, ClipboardList, Download, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, UserCog, Users } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { DateSelector, SecondaryButton } from "./ui";
 import type { AppUser } from "../types";
 
-export type AdminTab = "dashboard" | "routes" | "tasks" | "links" | "driver" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
+export type AdminTab = "dashboard" | "routes" | "tasks" | "links" | "driver" | "exports" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
 
 const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "dashboard", label: "ダッシュボード", icon: BarChart3 },
@@ -11,6 +11,7 @@ const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "tasks", label: "タスク管理", icon: ClipboardList },
   { id: "links", label: "便紐付け", icon: RouteIcon },
   { id: "driver", label: "ドライバー", icon: CalendarDays },
+  { id: "exports", label: "CSV出力", icon: Download },
   { id: "stations", label: "ステーション", icon: MapPinned },
   { id: "lanes", label: "レーン", icon: RouteIcon },
   { id: "workers", label: "作業員", icon: Users },

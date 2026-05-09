@@ -3,6 +3,7 @@ import { AppLayout, type AdminTab } from "./components/Layout";
 import { DashboardView } from "./features/DashboardView";
 import { LoginScreen } from "./components/LoginScreen";
 import { DriverBoard } from "./features/DriverBoard";
+import { ExportView } from "./features/ExportView";
 import { FieldTaskBoard } from "./features/FieldTaskBoard";
 import { MasterManagement } from "./features/MasterManagement";
 import { OperationLogView } from "./features/OperationLogView";
@@ -30,6 +31,7 @@ export default function App() {
         {activeTab === "tasks" ? <TaskManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "links" ? <RouteLinkManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "driver" ? <DriverBoard user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "exports" ? <ExportView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "stations" ? <MasterManagement kind="stations" user={appUser} /> : null}
         {activeTab === "lanes" ? <MasterManagement kind="lanes" user={appUser} /> : null}
         {activeTab === "workers" ? <MasterManagement kind="workers" user={appUser} /> : null}
