@@ -1,6 +1,6 @@
-# YardManager Phase 1
+# YardManager
 
-React + TypeScript + Firebaseで作成した、トラックヤード管理アプリのPhase 1 MVPです。
+React + TypeScript + Firebaseで作成した、トラックヤード管理アプリです。
 
 ## 技術構成
 
@@ -11,7 +11,8 @@ React + TypeScript + Firebaseで作成した、トラックヤード管理アプ
 - Cloud Firestore
 - Firebase Hosting
 
-Phase 1では、Cloud Functions、Excel取込、Excel出力、テンプレート生成、ダッシュボード、実績分析は対象外です。
+Phase 1では、Cloud Functions、Excel取込、Excel出力、テンプレート生成、ダッシュボード、実績分析は対象外でした。
+Phase 2では、Phase 1の運用基盤を保ったまま、ダッシュボード、Excel入出力、実績分析などを段階的に追加します。
 
 ## 実装済み機能
 
@@ -35,6 +36,7 @@ Phase 1では、Cloud Functions、Excel取込、Excel出力、テンプレート
 - 削除確認
 - 重複・時間かぶり警告
 - Firestore Security Rulesによる権限制御
+- Phase 2ダッシュボード
 
 ## Phase 1機能整理
 
@@ -52,6 +54,20 @@ Phase 1では、日々のヤード作業をブラウザ上で登録・確認・�
 | 確認 | 権限別の手動確認、スマホ幅表示確認、本番デプロイ確認 | 実施対象 |
 
 Phase 1完了の判断は、`Phase 1確認シナリオ`を一通り通し、管理者・一般ユーザーの両方で想定通り操作できることを基準にします。
+
+## Phase 2機能整理
+
+Phase 2では、日々の運用状況を見やすくし、入力・出力・分析を効率化することをゴールにします。
+
+| 区分 | Phase 2で扱う機能 | 状態 |
+| --- | --- | --- |
+| ダッシュボード | 当日の便・タスク進捗、前工程待ち、作業員別/ステーション別進捗 | 実装済み |
+| Excel取込 | 便・タスク計画の取込 | 未着手 |
+| Excel出力 | 当日計画・実績の出力 | 未着手 |
+| ダイヤテンプレート | 定型便・定型タスクの生成 | 未着手 |
+| 実績分析 | 作業時間、遅れ、完了率の集計 | 未着手 |
+| 入力改善 | フォームの使いやすさ、入力バリデーション強化 | 未着手 |
+| テスト | Firestore Rulesの自動テスト | 未着手 |
 
 ## ローカル起動
 
@@ -267,7 +283,6 @@ firebase.cmd deploy --only hosting
 - Excel取込
 - Excel出力
 - ダイヤテンプレート生成
-- ダッシュボード
 - 実績分析
 - 入力フォームのモーダル改善
 - 入力バリデーション強化

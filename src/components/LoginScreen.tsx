@@ -14,7 +14,7 @@ export function LoginScreen({ error, loading, onLogin }: { error: string; loadin
   return (
     <div className="login-page">
       <Card className="login-card">
-        <p className="eyebrow">YardManager Phase 1</p>
+        <p className="eyebrow">YardManager Phase 2</p>
         <h1>ログイン</h1>
         <form onSubmit={handleSubmit} className="form-stack">
           <Field label="メールアドレス">

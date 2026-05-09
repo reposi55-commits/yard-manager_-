@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { AppLayout, type AdminTab } from "./components/Layout";
+import { DashboardView } from "./features/DashboardView";
 import { LoginScreen } from "./components/LoginScreen";
 import { DriverBoard } from "./features/DriverBoard";
 import { FieldTaskBoard } from "./features/FieldTaskBoard";
@@ -15,7 +16,7 @@ import { getDefaultBusinessDate } from "./utils/date";
 export default function App() {
   const { appUser, loading, error, login, logout } = useAuthUser();
   const [businessDate, setBusinessDate] = useState(getDefaultBusinessDate());
-  const [activeTab, setActiveTab] = useState<AdminTab>("routes");
+  const [activeTab, setActiveTab] = useState<AdminTab>("dashboard");
 
   if (!appUser) {
     return <LoginScreen error={error} loading={loading} onLogin={login} />;
@@ -24,6 +25,7 @@ export default function App() {
   const content =
     appUser.role === "admin" ? (
       <>
+        {activeTab === "dashboard" ? <DashboardView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "routes" ? <RouteManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "tasks" ? <TaskManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "links" ? <RouteLinkManagement user={appUser} businessDate={businessDate} /> : null}

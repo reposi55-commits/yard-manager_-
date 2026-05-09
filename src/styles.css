@@ -373,6 +373,135 @@ th {
   font-weight: 700;
 }
 
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 14px;
+  margin-bottom: 18px;
+}
+
+.metric-panel,
+.dashboard-panel {
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.metric-panel {
+  display: grid;
+  gap: 4px;
+  padding: 16px;
+}
+
+.metric-panel span,
+.dashboard-panel-header span,
+.progress-row small,
+.mini-list-item small,
+.mini-list-item span,
+.dashboard-empty {
+  color: #607284;
+}
+
+.metric-panel strong {
+  font-size: 2rem;
+  line-height: 1.1;
+}
+
+.metric-panel small {
+  font-weight: 700;
+}
+
+.dashboard-split {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dashboard-panel {
+  padding: 16px;
+}
+
+.dashboard-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.dashboard-panel-header h3 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.dashboard-panel-header span {
+  font-weight: 800;
+}
+
+.progress-list,
+.mini-list {
+  display: grid;
+  gap: 12px;
+}
+
+.progress-row {
+  display: grid;
+  gap: 6px;
+}
+
+.progress-row-top,
+.mini-list-item {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: center;
+}
+
+.progress-row-top strong,
+.mini-list-item strong {
+  overflow-wrap: anywhere;
+}
+
+.progress-track {
+  height: 10px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #e4ebf0;
+}
+
+.progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: #0f766e;
+}
+
+.mini-list-item {
+  padding: 10px 0;
+  border-top: 1px solid #e1e7ec;
+}
+
+.mini-list-item:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.mini-list-item div {
+  display: grid;
+  gap: 2px;
+}
+
+.mini-list-item small {
+  flex: 0 0 auto;
+  font-weight: 800;
+}
+
+.dashboard-empty {
+  margin: 0;
+  font-weight: 700;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;
@@ -736,6 +865,11 @@ th {
   }
 
   .filter-bar {
+    grid-template-columns: 1fr;
+  }
+
+  .dashboard-grid,
+  .dashboard-split {
     grid-template-columns: 1fr;
   }
 

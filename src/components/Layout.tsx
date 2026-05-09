@@ -1,11 +1,12 @@
-import { CalendarDays, ClipboardList, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, UserCog, Users } from "lucide-react";
+import { BarChart3, CalendarDays, ClipboardList, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, UserCog, Users } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { DateSelector, SecondaryButton } from "./ui";
 import type { AppUser } from "../types";
 
-export type AdminTab = "routes" | "tasks" | "links" | "driver" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
+export type AdminTab = "dashboard" | "routes" | "tasks" | "links" | "driver" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
 
 const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
+  { id: "dashboard", label: "ダッシュボード", icon: BarChart3 },
   { id: "routes", label: "便管理", icon: Truck },
   { id: "tasks", label: "タスク管理", icon: ClipboardList },
   { id: "links", label: "便紐付け", icon: RouteIcon },
@@ -38,7 +39,7 @@ export function AppLayout({
     <div className="app-shell">
       <header className="app-header">
         <div>
-          <p className="eyebrow">YardManager Phase 1</p>
+          <p className="eyebrow">YardManager Phase 2</p>
           <h1>{user.role === "admin" ? "管理画面" : "作業員画面"}</h1>
         </div>
         <div className="header-actions">
