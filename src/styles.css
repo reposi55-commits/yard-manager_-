@@ -367,6 +367,12 @@ th {
   background: #f8fafb;
 }
 
+.helper-text {
+  margin: -4px 0 16px;
+  color: #53677a;
+  font-weight: 700;
+}
+
 .modal-backdrop {
   position: fixed;
   inset: 0;

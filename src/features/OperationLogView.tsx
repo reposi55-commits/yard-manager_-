@@ -10,6 +10,7 @@ const targetLabels: Record<LogTargetType, string> = {
   station: "ステーション",
   lane: "レーン",
   worker: "作業員",
+  user: "ユーザー",
   route: "便",
   task: "タスク",
   routeLink: "便紐付け",

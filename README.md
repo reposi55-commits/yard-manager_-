@@ -97,6 +97,8 @@ Authenticationでユーザーを作成したあと、Firestoreの`users/{uid}`�
 
 `workerId`には作業員名ではなく、`workers`コレクションのドキュメントIDを設定します。
 
+管理者ログイン後は、アプリの「ユーザー管理」画面から`users/{uid}`を追加・編集できます。Authenticationユーザー自体の作成はFirebase Consoleで行い、発行されたUIDを「ユーザー管理」に登録してください。
+
 ## 権限設計
 
 - 管理者は同じ`siteId`のマスタ、便、タスク、紐付け、操作履歴を扱えます。

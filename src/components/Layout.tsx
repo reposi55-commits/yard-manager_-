@@ -1,9 +1,9 @@
-import { CalendarDays, ClipboardList, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, Users } from "lucide-react";
+import { CalendarDays, ClipboardList, History, LogOut, MapPinned, RouteIcon, Smartphone, Truck, UserCog, Users } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { DateSelector, SecondaryButton } from "./ui";
 import type { AppUser } from "../types";
 
-export type AdminTab = "routes" | "tasks" | "links" | "driver" | "stations" | "lanes" | "workers" | "field" | "logs";
+export type AdminTab = "routes" | "tasks" | "links" | "driver" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
 
 const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "routes", label: "便管理", icon: Truck },
@@ -13,6 +13,7 @@ const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "stations", label: "ステーション", icon: MapPinned },
   { id: "lanes", label: "レーン", icon: RouteIcon },
   { id: "workers", label: "作業員", icon: Users },
+  { id: "users", label: "ユーザー管理", icon: UserCog },
   { id: "field", label: "作業カード", icon: Smartphone },
   { id: "logs", label: "操作履歴", icon: History },
 ];

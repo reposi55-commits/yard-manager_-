@@ -1,9 +1,11 @@
 import {
   addDoc,
   collection,
+  deleteField,
   doc,
   onSnapshot,
   query,
+  setDoc,
   Timestamp,
   updateDoc,
   where,
@@ -51,6 +53,10 @@ function buildTargetLabel(collectionName: CollectionName, value: Record<string, 
     return [sub, main].filter(Boolean).join(" → ");
   }
   return "";
+}
+
+function buildUserTargetLabel(value: Pick<AppUser, "email" | "displayName">): string {
+  return [value.displayName, value.email].filter(Boolean).join(" / ");
 }
 
 function clean<T extends Record<string, unknown>>(value: T): T {
@@ -133,10 +139,99 @@ export function subscribeWorkerTasks(
   );
 }
 
+export function subscribeUsers(
+  siteId: string,
+  onData: (items: AppUser[]) => void,
+  onError: (message: string) => void,
+): Unsubscribe {
+  return subscribeCollection<AppUser>(
+    "users",
+    [where("siteId", "==", siteId)],
+    (items) => {
+      const sorted = [...items].sort((a, b) => {
+        const activeOrder = Number(b.active) - Number(a.active);
+        const roleOrder = a.role.localeCompare(b.role);
+        const nameOrder = a.displayName.localeCompare(b.displayName);
+        return activeOrder || roleOrder || nameOrder;
+      });
+      onData(sorted);
+    },
+    onError,
+  );
+}
+
 export async function writeOperationLog(input: Omit<OperationLog, "id" | "operatedAt">): Promise<void> {
   await addDoc(collection(db, "operationLogs"), {
     ...input,
     operatedAt: Timestamp.now(),
+  });
+}
+
+export async function createAppUserProfile(
+  uid: string,
+  data: Pick<AppUser, "email" | "displayName" | "role" | "active" | "workerId"> & { siteId: string },
+  user: AppUser,
+): Promise<void> {
+  const now = Timestamp.now();
+  const payload = clean({
+    ...data,
+    workerId: data.role === "user" ? data.workerId : undefined,
+    businessDate: MASTER_BUSINESS_DATE,
+    createdAt: now,
+    createdBy: user.id,
+    updatedAt: now,
+    updatedBy: user.id,
+    deleted: false,
+  } as Record<string, unknown>);
+
+  await setDoc(doc(db, "users", uid), payload);
+  await writeOperationLog({
+    siteId: data.siteId,
+    businessDate: MASTER_BUSINESS_DATE,
+    targetType: "user",
+    targetId: uid,
+    targetLabel: buildUserTargetLabel(data),
+    action: "create",
+    before: null,
+    after: { id: uid, ...payload },
+    operatedBy: user.id,
+  });
+}
+
+export async function updateAppUserProfile(
+  before: AppUser,
+  patch: Pick<AppUser, "email" | "displayName" | "role" | "active" | "workerId">,
+  user: AppUser,
+): Promise<void> {
+  const now = Timestamp.now();
+  const afterData = clean({
+    ...before,
+    ...patch,
+    workerId: patch.role === "user" ? patch.workerId : undefined,
+    updatedAt: now,
+    updatedBy: user.id,
+  } as Record<string, unknown>);
+  const updatePayload = clean({
+    ...patch,
+    workerId: patch.role === "user" ? patch.workerId : deleteField(),
+    updatedAt: now,
+    updatedBy: user.id,
+  } as Record<string, unknown>);
+
+  await updateDoc(doc(db, "users", before.id), updatePayload as Record<string, never>);
+  await writeOperationLog({
+    siteId: before.siteId,
+    businessDate: MASTER_BUSINESS_DATE,
+    targetType: "user",
+    targetId: before.id,
+    targetLabel: buildUserTargetLabel({
+      email: String(afterData.email || ""),
+      displayName: String(afterData.displayName || ""),
+    }),
+    action: "update",
+    before: before as unknown as Record<string, unknown>,
+    after: afterData,
+    operatedBy: user.id,
   });
 }
 

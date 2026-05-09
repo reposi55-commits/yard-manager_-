@@ -94,13 +94,21 @@ service cloud.firestore {
         && logMatchesCurrentTask();
     }
 
+    function adminUserProfileUpdate() {
+      return isAdmin()
+        && resource.data.siteId == userDoc().data.siteId
+        && request.resource.data.siteId == resource.data.siteId
+        && request.resource.data.businessDate == resource.data.businessDate
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["email", "displayName", "role", "active", "workerId", "updatedAt", "updatedBy"]);
+    }
+
     match /users/{userId} {
       allow read: if (signedIn() && request.auth.uid == userId)
         || (isAdmin() && resource.data.siteId == userDoc().data.siteId);
       allow create: if isAdmin() && request.resource.data.siteId == userDoc().data.siteId;
-      allow update: if isAdmin()
-        && resource.data.siteId == userDoc().data.siteId
-        && request.resource.data.siteId == resource.data.siteId;
+      allow update: if adminUserProfileUpdate();
       allow delete: if isAdmin() && resource.data.siteId == userDoc().data.siteId;
     }
 

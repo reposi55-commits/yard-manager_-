@@ -4,7 +4,7 @@ export type UserRole = "admin" | "user";
 export type RouteStatus = "waiting" | "in_progress" | "completed";
 export type TaskStatus = "pending" | "ready" | "in_progress" | "completed";
 export type RouteType = "main" | "sub";
-export type LogTargetType = "station" | "lane" | "worker" | "route" | "task" | "routeLink";
+export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink";
 export type LogAction = "create" | "update" | "delete" | "status_change";
 
 export type FirestoreDate = Timestamp | null;

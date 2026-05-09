@@ -8,6 +8,7 @@ import { OperationLogView } from "./features/OperationLogView";
 import { RouteLinkManagement } from "./features/RouteLinkManagement";
 import { RouteManagement } from "./features/RouteManagement";
 import { TaskManagement } from "./features/TaskManagement";
+import { UserManagement } from "./features/UserManagement";
 import { useAuthUser } from "./hooks/useAuthUser";
 import { getDefaultBusinessDate } from "./utils/date";
 
@@ -30,6 +31,7 @@ export default function App() {
         {activeTab === "stations" ? <MasterManagement kind="stations" user={appUser} /> : null}
         {activeTab === "lanes" ? <MasterManagement kind="lanes" user={appUser} /> : null}
         {activeTab === "workers" ? <MasterManagement kind="workers" user={appUser} /> : null}
+        {activeTab === "users" ? <UserManagement user={appUser} /> : null}
         {activeTab === "field" ? <FieldTaskBoard user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "logs" ? <OperationLogView user={appUser} businessDate={businessDate} /> : null}
       </>
