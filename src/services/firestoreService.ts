@@ -240,7 +240,7 @@ export async function createEntity<K extends CollectionName>(
   data: Omit<EntityMap[K], "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "deleted">,
   user: AppUser,
   action: LogAction = "create",
-): Promise<void> {
+): Promise<string> {
   const now = Timestamp.now();
   const payload = clean({
     ...data,
@@ -262,6 +262,7 @@ export async function createEntity<K extends CollectionName>(
     after: { id: ref.id, ...payload },
     operatedBy: user.id,
   });
+  return ref.id;
 }
 
 export async function updateEntity<K extends CollectionName>(

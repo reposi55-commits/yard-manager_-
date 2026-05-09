@@ -5,11 +5,14 @@ import { LoginScreen } from "./components/LoginScreen";
 import { DriverBoard } from "./features/DriverBoard";
 import { ExportView } from "./features/ExportView";
 import { FieldTaskBoard } from "./features/FieldTaskBoard";
+import { ImportPreviewView } from "./features/ImportPreviewView";
 import { MasterManagement } from "./features/MasterManagement";
 import { OperationLogView } from "./features/OperationLogView";
+import { PerformanceAnalysisView } from "./features/PerformanceAnalysisView";
 import { RouteLinkManagement } from "./features/RouteLinkManagement";
 import { RouteManagement } from "./features/RouteManagement";
 import { TaskManagement } from "./features/TaskManagement";
+import { TemplateGenerationView } from "./features/TemplateGenerationView";
 import { UserManagement } from "./features/UserManagement";
 import { useAuthUser } from "./hooks/useAuthUser";
 import { getDefaultBusinessDate } from "./utils/date";
@@ -27,11 +30,14 @@ export default function App() {
     appUser.role === "admin" ? (
       <>
         {activeTab === "dashboard" ? <DashboardView user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "analysis" ? <PerformanceAnalysisView user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "templates" ? <TemplateGenerationView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "routes" ? <RouteManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "tasks" ? <TaskManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "links" ? <RouteLinkManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "driver" ? <DriverBoard user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "exports" ? <ExportView user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "imports" ? <ImportPreviewView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "stations" ? <MasterManagement kind="stations" user={appUser} /> : null}
         {activeTab === "lanes" ? <MasterManagement kind="lanes" user={appUser} /> : null}
         {activeTab === "workers" ? <MasterManagement kind="workers" user={appUser} /> : null}
