@@ -194,13 +194,17 @@ button {
   display: grid;
   gap: 6px;
   font-weight: 700;
+  min-width: 0;
 }
 
 .date-selector input,
 .field input,
 .field select,
 .field textarea {
+  width: 100%;
+  min-width: 0;
   min-height: 44px;
+  box-sizing: border-box;
   border: 1px solid #bdcbd5;
   border-radius: 8px;
   padding: 9px 10px;
