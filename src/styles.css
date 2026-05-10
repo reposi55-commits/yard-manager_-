@@ -267,6 +267,49 @@ button {
   height: 20px;
 }
 
+.form-check-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.form-check-panel strong {
+  color: #142033;
+}
+
+.form-check-panel p,
+.form-check-panel ul {
+  margin: 0;
+}
+
+.form-check-panel ul {
+  display: grid;
+  gap: 6px;
+  padding-left: 20px;
+}
+
+.form-check-panel.ok {
+  border-color: #b9e7ca;
+  background: #f3fbf6;
+  color: #146c43;
+}
+
+.form-check-panel.warning {
+  border-color: #ffd08a;
+  background: #fff8ed;
+  color: #805200;
+}
+
+.form-check-panel.error {
+  border-color: #ffc9c2;
+  background: #fff3f0;
+  color: #9f1c17;
+}
+
 .table-wrap {
   width: 100%;
   overflow-x: auto;
