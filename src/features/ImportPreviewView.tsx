@@ -8,6 +8,7 @@ import { useMasterOptions } from "./MasterManagement";
 
 type ImportKind = "routes" | "tasks";
 type ImportMode = "strict" | "skipExisting";
+type PreviewFilter = "all" | "importable" | "skipped" | "issues";
 
 type ValidationResult = {
   rowNumber: number;
@@ -67,6 +68,7 @@ const requiredColumns: Record<ImportKind, string[]> = {
 export function ImportPreviewView({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [kind, setKind] = useState<ImportKind>("routes");
   const [importMode, setImportMode] = useState<ImportMode>("strict");
+  const [previewFilter, setPreviewFilter] = useState<PreviewFilter>("all");
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -105,7 +107,34 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   );
   const validRowCount = importableRows.length;
   const issueCount = validation.length + missingColumns.length;
+  const previewIssueCount = missingColumns.length > 0 ? rows.length : validation.length;
   const canImport = rows.length > 0 && validRowCount > 0 && issueCount === 0 && !saving;
+  const previewRows = useMemo(
+    () =>
+      rows
+        .map((row, index) => {
+          const rowNumber = index + 2;
+          return {
+            row,
+            rowNumber,
+            status: getPreviewStatus(rowNumber, validationByRow, skippedByRow, missingColumns.length > 0),
+          };
+        })
+        .filter((item) => {
+          if (previewFilter === "importable") return item.status.tone === "ok";
+          if (previewFilter === "skipped") return item.status.tone === "skip";
+          if (previewFilter === "issues") return item.status.tone === "error";
+          return true;
+        }),
+    [missingColumns.length, previewFilter, rows, skippedByRow, validationByRow],
+  );
+  const importBlockReason = getImportBlockReason({
+    rowCount: rows.length,
+    missingColumnCount: missingColumns.length,
+    issueCount,
+    validRowCount,
+    skippedRowCount: skippedRows.length,
+  });
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -149,12 +178,32 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     downloadCsv(`yardmanager-import-skipped-${kind}-${businessDate}.csv`, skippedCsvRows);
   }
 
+  function downloadJudgedRows() {
+    const judgedRows = rows.map((row, index) => {
+      const rowNumber = index + 2;
+      const validationItem = validationByRow.get(rowNumber);
+      const skippedItem = skippedByRow.get(rowNumber);
+      const status = getPreviewStatus(rowNumber, validationByRow, skippedByRow, missingColumns.length > 0);
+      const reason =
+        missingColumns.length > 0
+          ? `不足している列: ${missingColumns.join("、")}`
+          : validationItem?.errors.join(" / ") || skippedItem?.reason || "";
+      return {
+        行: rowNumber,
+        判定: status.label,
+        理由: reason,
+        ...row,
+      };
+    });
+    downloadCsv(`yardmanager-import-judged-${kind}-${businessDate}.csv`, judgedRows);
+  }
+
   async function importRows() {
     setError("");
     setSuccess("");
     setImportResult(null);
     if (!canImport) {
-      setError("取込前に修正が必要な行があります。");
+      setError(importBlockReason || "取込前に修正が必要な行があります。");
       return;
     }
     const targetLabel = kind === "routes" ? "便" : "タスク";
@@ -222,6 +271,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
             value={kind}
             onChange={(event) => {
               setKind(event.target.value as ImportKind);
+              setPreviewFilter("all");
               reset();
               setSuccess("");
             }}
@@ -243,14 +293,18 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           <SecondaryButton type="button" onClick={downloadTemplate}>
             テンプレート出力
           </SecondaryButton>
+          <SecondaryButton type="button" onClick={downloadJudgedRows} disabled={rows.length === 0}>
+            判定CSV出力
+          </SecondaryButton>
           <SecondaryButton type="button" onClick={() => reset()} disabled={!fileName && rows.length === 0}>
             クリア
           </SecondaryButton>
-          <PrimaryButton type="button" onClick={() => void importRows()} disabled={!canImport}>
+          <PrimaryButton type="button" onClick={() => void importRows()} disabled={!canImport} title={importBlockReason}>
             {saving ? "登録中..." : "新規登録"}
           </PrimaryButton>
         </div>
       </div>
+      {importBlockReason ? <p className="helper-text import-guidance">{importBlockReason}</p> : null}
 
       <div className="import-summary">
         <Metric label="ファイル" value={fileName || "-"} />
@@ -343,35 +397,53 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
 
       {rows.length > 0 ? (
         <section className="import-panel">
-          <h3>プレビュー</h3>
-          <div className="table-wrap">
-            <table>
-              <thead>
-                <tr>
-                  <th>判定</th>
-                  {headers.map((header) => <th key={header}>{header}</th>)}
-                </tr>
-              </thead>
-              <tbody>
-                {rows.slice(0, 20).map((row, index) => {
-                  const rowNumber = index + 2;
-                  const previewStatus = getPreviewStatus(rowNumber, validationByRow, skippedByRow, missingColumns.length > 0);
-                  return (
-                    <tr key={`${fileName}-${index}`}>
-                      <td>
-                        <span className={`import-row-status ${previewStatus.tone}`}>{previewStatus.label}</span>
-                      </td>
-                      {headers.map((header) => <td key={header}>{row[header] || "-"}</td>)}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="import-preview-header">
+            <h3>プレビュー</h3>
+            <div className="import-preview-filters" aria-label="プレビュー絞り込み">
+              <PreviewFilterButton active={previewFilter === "all"} onClick={() => setPreviewFilter("all")} label={`全部 ${rows.length}`} />
+              <PreviewFilterButton active={previewFilter === "importable"} onClick={() => setPreviewFilter("importable")} label={`登録予定 ${validRowCount}`} />
+              <PreviewFilterButton active={previewFilter === "skipped"} onClick={() => setPreviewFilter("skipped")} label={`スキップ ${skippedRows.length}`} />
+              <PreviewFilterButton active={previewFilter === "issues"} onClick={() => setPreviewFilter("issues")} label={`要修正 ${previewIssueCount}`} />
+            </div>
           </div>
-          {rows.length > 20 ? <p className="helper-text">先頭20件のみ表示しています。</p> : null}
+          {previewRows.length === 0 ? (
+            <EmptyState message="この条件に一致する行はありません。" />
+          ) : (
+            <>
+              <div className="table-wrap">
+                <table>
+                  <thead>
+                    <tr>
+                      <th>判定</th>
+                      {headers.map((header) => <th key={header}>{header}</th>)}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {previewRows.slice(0, 20).map((item) => (
+                      <tr key={`${fileName}-${item.rowNumber}`}>
+                        <td>
+                          <span className={`import-row-status ${item.status.tone}`}>{item.status.label}</span>
+                        </td>
+                        {headers.map((header) => <td key={header}>{item.row[header] || "-"}</td>)}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+              {previewRows.length > 20 ? <p className="helper-text">絞り込み後の先頭20件のみ表示しています。</p> : null}
+            </>
+          )}
         </section>
       ) : null}
     </Card>
+  );
+}
+
+function PreviewFilterButton({ active, onClick, label }: { active: boolean; onClick: () => void; label: string }) {
+  return (
+    <button className={`import-preview-filter ${active ? "active" : ""}`} type="button" onClick={onClick}>
+      {label}
+    </button>
   );
 }
 
@@ -393,6 +465,27 @@ function getPreviewStatus(
   if (hasMissingColumns || validationByRow.has(rowNumber)) return { label: "要修正", tone: "error" };
   if (skippedByRow.has(rowNumber)) return { label: "スキップ", tone: "skip" };
   return { label: "登録予定", tone: "ok" };
+}
+
+function getImportBlockReason({
+  rowCount,
+  missingColumnCount,
+  issueCount,
+  validRowCount,
+  skippedRowCount,
+}: {
+  rowCount: number;
+  missingColumnCount: number;
+  issueCount: number;
+  validRowCount: number;
+  skippedRowCount: number;
+}): string {
+  if (rowCount === 0) return "";
+  if (missingColumnCount > 0) return "CSVに不足している列があります。テンプレートを確認してください。";
+  if (issueCount > 0) return "修正が必要な行があります。内容を直すか、エラー行CSVを出力して確認してください。";
+  if (validRowCount === 0 && skippedRowCount > 0) return "登録対象はすべて既存データのため、取込対象がありません。";
+  if (validRowCount === 0) return "登録できる行がありません。CSVの内容を確認してください。";
+  return "";
 }
 
 function findSkippedRows(

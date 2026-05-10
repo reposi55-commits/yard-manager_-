@@ -560,6 +560,13 @@ th {
   margin-top: 0;
 }
 
+.import-guidance {
+  margin-top: -8px;
+  margin-bottom: 12px;
+  color: #44566c;
+  font-weight: 700;
+}
+
 .import-summary {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
@@ -606,6 +613,43 @@ th {
 
 .import-panel-header h3 {
   margin: 0;
+}
+
+.import-preview-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.import-preview-header h3 {
+  margin: 0;
+}
+
+.import-preview-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.import-preview-filter {
+  min-height: 36px;
+  border: 1px solid #c8d4dc;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #25364a;
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 800;
+  padding: 6px 12px;
+}
+
+.import-preview-filter.active {
+  border-color: #0f766e;
+  background: #e9f7ef;
+  color: #0f766e;
 }
 
 .import-result {
@@ -1238,6 +1282,15 @@ th {
   .import-panel-header {
     align-items: stretch;
     flex-direction: column;
+  }
+
+  .import-preview-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .import-preview-filters {
+    justify-content: flex-start;
   }
 
   .task-card-top {
