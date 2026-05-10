@@ -888,7 +888,11 @@ th {
 }
 
 .batch-toolbar {
-  grid-template-columns: repeat(4, minmax(180px, 1fr)) auto;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+}
+
+.batch-toolbar .btn {
+  width: 100%;
 }
 
 .template-mode-tabs {
@@ -902,6 +906,8 @@ th {
 }
 
 .template-mode-tabs button {
+  flex: 1;
+  min-width: 0;
   min-height: 44px;
   padding: 8px 14px;
   border: 0;
@@ -910,6 +916,7 @@ th {
   color: #53677a;
   font-weight: 900;
   cursor: pointer;
+  white-space: normal;
 }
 
 .template-mode-tabs button.active {
@@ -920,7 +927,7 @@ th {
 
 .template-management {
   display: grid;
-  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 16px;
   margin-top: 18px;
 }
@@ -933,7 +940,7 @@ th {
 
 .template-row-editor {
   display: grid;
-  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+  grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
   gap: 12px;
   align-items: end;
   padding: 12px;
@@ -945,7 +952,11 @@ th {
 .row-action-cell {
   display: flex;
   align-items: end;
-  justify-content: flex-end;
+  justify-content: stretch;
+}
+
+.row-action-cell .btn {
+  width: 100%;
 }
 
 .template-summary {
@@ -1012,6 +1023,7 @@ th {
   gap: 12px;
   align-items: center;
   margin-bottom: 12px;
+  flex-wrap: wrap;
 }
 
 .template-result-header h3 {
