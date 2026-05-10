@@ -72,6 +72,7 @@ export function subscribeCollection<T>(
   constraints: QueryConstraint[],
   onData: (items: T[]) => void,
   onError: (message: string) => void,
+  options: { includeDeleted?: boolean } = {},
 ): Unsubscribe {
   const ref = collection(db, collectionName);
   return onSnapshot(
@@ -79,7 +80,7 @@ export function subscribeCollection<T>(
     (snapshot) => {
       const items = snapshot.docs
         .map((item) => mapDocument<T>(item.id, item.data()))
-        .filter((item) => !(item as { deleted?: boolean }).deleted);
+        .filter((item) => options.includeDeleted || !(item as { deleted?: boolean }).deleted);
       onData(items);
     },
     (error) => onError(error.message),
