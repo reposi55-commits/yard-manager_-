@@ -81,11 +81,13 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [generationResult, setGenerationResult] = useState<TemplateGenerationResult | null>(null);
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const { stations, lanes, workers, error: masterError } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
+  useEffect(() => setSafetyConfirmed(false), [businessDate, selectedId]);
 
   const activeStations = useMemo(() => stations.filter((station) => station.active), [stations]);
   const activeLanes = useMemo(() => lanes.filter((lane) => lane.active), [lanes]);
@@ -99,14 +101,20 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
     () => validateTemplate(selected, routes, tasks, activeStations, activeLanes, activeWorkers),
     [selected, routes, tasks, activeStations, activeLanes, activeWorkers],
   );
-  const canGenerate = validation.length === 0 && !saving;
+  const generateBlockReason =
+    validation.length > 0
+      ? "生成前に確認が必要な内容があります。"
+      : !safetyConfirmed
+        ? "対象日・作成件数・既存データを上書きしないことを確認してください。"
+        : "";
+  const canGenerate = validation.length === 0 && safetyConfirmed && !saving;
 
   async function generate() {
     setError("");
     setSuccess("");
     setGenerationResult(null);
     if (!canGenerate) {
-      setError("生成前に確認が必要な内容があります。");
+      setError(generateBlockReason || "生成前に確認が必要な内容があります。");
       return;
     }
     if (!window.confirm(`${selected.name}から便${selected.routes.length}件、タスク${selected.tasks.length}件を新規作成します。既存データは上書きしません。よろしいですか？`)) return;
@@ -209,13 +217,13 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
 
       <div className="template-toolbar">
         <Field label="テンプレート">
-          <select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setSuccess(""); setError(""); setGenerationResult(null); }}>
+          <select value={selectedId} onChange={(event) => { setSelectedId(event.target.value); setSuccess(""); setError(""); setGenerationResult(null); setSafetyConfirmed(false); }}>
             {templates.map((template) => (
               <option key={template.id} value={template.id}>{template.name}</option>
             ))}
           </select>
         </Field>
-        <PrimaryButton type="button" onClick={() => void generate()} disabled={!canGenerate}>
+        <PrimaryButton type="button" onClick={() => void generate()} disabled={!canGenerate} title={generateBlockReason}>
           {saving ? "作成中..." : "テンプレート作成"}
         </PrimaryButton>
       </div>
@@ -229,6 +237,23 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
           <span>作成件数</span>
           <strong>便 {selected.routes.length}件 / タスク {selected.tasks.length}件</strong>
         </div>
+      </section>
+
+      <section className={`form-check-panel ${validation.length === 0 ? "warning" : "error"}`}>
+        <strong>作成前の最終確認</strong>
+        <p>
+          対象日 {businessDate} に便{selected.routes.length}件、タスク{selected.tasks.length}件を新規作成します。
+          既存データは上書きしません。
+        </p>
+        <label className="check-row">
+          <input
+            type="checkbox"
+            checked={safetyConfirmed}
+            disabled={validation.length > 0}
+            onChange={(event) => setSafetyConfirmed(event.target.checked)}
+          />
+          対象日・作成件数・警告内容を確認しました
+        </label>
       </section>
 
       {validation.length > 0 ? (

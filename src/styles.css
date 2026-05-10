@@ -94,9 +94,10 @@ button {
 
 .main-nav {
   display: flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 12px 28px;
-  overflow-x: auto;
+  overflow-x: visible;
   background: #ffffff;
   border-bottom: 1px solid #d8e0e6;
 }
@@ -1286,6 +1287,8 @@ th {
 
   .main-nav {
     padding: 10px 16px;
+    flex-wrap: nowrap;
+    overflow-x: auto;
   }
 
   .app-main {

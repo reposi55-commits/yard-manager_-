@@ -76,11 +76,13 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
+  const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
   const { stations, lanes, workers, error: masterError } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
+  useEffect(() => setSafetyConfirmed(false), [businessDate, importMode, kind]);
 
   const headers = useMemo(() => Object.keys(rows[0] || {}), [rows]);
   const missingColumns = useMemo(
@@ -108,7 +110,19 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   const validRowCount = importableRows.length;
   const issueCount = validation.length + missingColumns.length;
   const previewIssueCount = missingColumns.length > 0 ? rows.length : validation.length;
-  const canImport = rows.length > 0 && validRowCount > 0 && issueCount === 0 && !saving;
+  const baseImportBlockReason = getImportBlockReason({
+    rowCount: rows.length,
+    missingColumnCount: missingColumns.length,
+    issueCount,
+    validRowCount,
+    skippedRowCount: skippedRows.length,
+  });
+  const importBlockReason =
+    baseImportBlockReason ||
+    (rows.length > 0 && validRowCount > 0 && issueCount === 0 && !safetyConfirmed
+      ? "対象日・登録件数・既存データを上書きしないことを確認してください。"
+      : "");
+  const canImport = rows.length > 0 && validRowCount > 0 && issueCount === 0 && safetyConfirmed && !saving;
   const previewRows = useMemo(
     () =>
       rows
@@ -128,19 +142,12 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
         }),
     [missingColumns.length, previewFilter, rows, skippedByRow, validationByRow],
   );
-  const importBlockReason = getImportBlockReason({
-    rowCount: rows.length,
-    missingColumnCount: missingColumns.length,
-    issueCount,
-    validRowCount,
-    skippedRowCount: skippedRows.length,
-  });
-
   async function handleFile(file: File | undefined) {
     if (!file) return;
     setError("");
     setSuccess("");
     setImportResult(null);
+    setSafetyConfirmed(false);
     setFileName(file.name);
     try {
       const text = await file.text();
@@ -246,6 +253,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     setRows([]);
     setFileName("");
     setError("");
+    setSafetyConfirmed(false);
     if (clearSuccess) setSuccess("");
     if (clearResult) setImportResult(null);
   }
@@ -313,6 +321,25 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
         <Metric label="スキップ" value={`${skippedRows.length}件`} />
         <Metric label="要修正" value={`${issueCount}件`} />
       </div>
+
+      {rows.length > 0 ? (
+        <section className={`form-check-panel ${issueCount === 0 && validRowCount > 0 ? "warning" : "error"}`}>
+          <strong>取込前の最終確認</strong>
+          <p>
+            対象日 {businessDate} に{kind === "routes" ? "便" : "タスク"}を{validRowCount}件新規登録します。
+            既存データは上書きしません{skippedRows.length > 0 ? `（既存${skippedRows.length}件はスキップ）` : ""}。
+          </p>
+          <label className="check-row">
+            <input
+              type="checkbox"
+              checked={safetyConfirmed}
+              disabled={validRowCount === 0 || issueCount > 0}
+              onChange={(event) => setSafetyConfirmed(event.target.checked)}
+            />
+            対象日・登録件数・スキップ内容を確認しました
+          </label>
+        </section>
+      ) : null}
 
       {missingColumns.length > 0 ? <p className="alert">不足している列: {missingColumns.join("、")}</p> : null}
       {skippedRows.length > 0 ? (

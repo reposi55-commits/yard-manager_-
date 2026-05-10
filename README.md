@@ -298,6 +298,9 @@ Phase 2の受入確認は、次のドキュメントを基準に行います。
 
 - [Phase 2受入確認](docs/PHASE2_ACCEPTANCE.md)
 - [Phase 2受入確認結果](docs/PHASE2_ACCEPTANCE_RESULT.md)
+- [Phase 2残り確認チェックリスト](docs/PHASE2_REMAINING_CHECKS.md)
+- [YardManager本番運用手順書](docs/OPERATION_MANUAL.md)
+- [データ保管・過去データ運用方針](docs/DATA_RETENTION_POLICY.md)
 
 ローカルで確認する場合:
 
@@ -311,8 +314,11 @@ npm.cmd run test:rules
 
 ## 次フェーズ候補
 
+詳しい優先度と判断ポイントは、[Phase 3候補整理](docs/PHASE3_CANDIDATES.md)にまとめています。
+
 - 既存データを上書きするCSV取込モード
 - 本格的なExcel `.xlsx` 出力
 - ダッシュボード/分析の期間比較
+- 過去データ検索・アーカイブ方針
 - 大規模データ向けのページング
 - CI環境でのRules自動テスト実行
