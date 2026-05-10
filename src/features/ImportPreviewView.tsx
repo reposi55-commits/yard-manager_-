@@ -7,10 +7,17 @@ import { labelToOffsetMin } from "../utils/date";
 import { useMasterOptions } from "./MasterManagement";
 
 type ImportKind = "routes" | "tasks";
+type ImportMode = "strict" | "skipExisting";
 
 type ValidationResult = {
   rowNumber: number;
   errors: string[];
+};
+
+type SkippedRow = {
+  rowNumber: number;
+  reason: string;
+  label: string;
 };
 
 type ImportResult = {
@@ -59,6 +66,7 @@ const requiredColumns: Record<ImportKind, string[]> = {
 
 export function ImportPreviewView({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [kind, setKind] = useState<ImportKind>("routes");
+  const [importMode, setImportMode] = useState<ImportMode>("strict");
   const [rows, setRows] = useState<ParsedCsvRow[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -77,12 +85,27 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     () => (rows.length === 0 ? [] : requiredColumns[kind].filter((column) => !headers.includes(column))),
     [headers, kind, rows.length],
   );
-  const validation = useMemo(
-    () => validateRows(kind, rows, { routes, tasks, stations, lanes, workers }),
-    [kind, rows, routes, tasks, stations, lanes, workers],
+  const skippedRows = useMemo(
+    () => (importMode === "skipExisting" ? findSkippedRows(kind, rows, { routes, tasks }) : []),
+    [importMode, kind, rows, routes, tasks],
   );
-  const validRowCount = missingColumns.length > 0 ? 0 : Math.max(0, rows.length - validation.length);
-  const canImport = rows.length > 0 && validRowCount === rows.length && missingColumns.length === 0 && !saving;
+  const skippedByRow = useMemo(() => new Map(skippedRows.map((row) => [row.rowNumber, row])), [skippedRows]);
+  const skippedRowNumbers = useMemo(() => new Set(skippedRows.map((row) => row.rowNumber)), [skippedRows]);
+  const validation = useMemo(
+    () => validateRows(kind, rows, { routes, tasks, stations, lanes, workers }).filter((item) => !skippedRowNumbers.has(item.rowNumber)),
+    [kind, rows, routes, tasks, stations, lanes, workers, skippedRowNumbers],
+  );
+  const validationByRow = useMemo(() => new Map(validation.map((item) => [item.rowNumber, item])), [validation]);
+  const importableRows = useMemo(
+    () =>
+      missingColumns.length > 0
+        ? []
+        : rows.filter((_, index) => !skippedRowNumbers.has(index + 2) && !validation.some((item) => item.rowNumber === index + 2)),
+    [missingColumns.length, rows, skippedRowNumbers, validation],
+  );
+  const validRowCount = importableRows.length;
+  const issueCount = validation.length + missingColumns.length;
+  const canImport = rows.length > 0 && validRowCount > 0 && issueCount === 0 && !saving;
 
   async function handleFile(file: File | undefined) {
     if (!file) return;
@@ -125,12 +148,13 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
       return;
     }
     const targetLabel = kind === "routes" ? "便" : "タスク";
-    if (!window.confirm(`${targetLabel}を${validRowCount}件、新規登録します。既存データは上書きしません。よろしいですか？`)) return;
+    const skipText = skippedRows.length > 0 ? `（既存${skippedRows.length}件をスキップ）` : "";
+    if (!window.confirm(`${targetLabel}を${validRowCount}件、新規登録します${skipText}。既存データは上書きしません。よろしいですか？`)) return;
 
     setSaving(true);
     try {
       if (kind === "routes") {
-        const payloads = rows.map((row) => buildRoutePayload(row, stations, user, businessDate));
+        const payloads = importableRows.map((row) => buildRoutePayload(row, stations, user, businessDate));
         for (const payload of payloads) {
           await createEntity("routes", payload, user);
         }
@@ -140,7 +164,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           labels: payloads.map((payload) => `${payload.routeName} / ${payload.flightNumber}`),
         });
       } else {
-        const payloads = rows.map((row) => buildTaskPayload(row, routes, workers, lanes, user, businessDate));
+        const payloads = importableRows.map((row) => buildTaskPayload(row, routes, workers, lanes, user, businessDate));
         for (const payload of payloads) {
           await createEntity("tasks", payload, user);
         }
@@ -150,7 +174,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           labels: payloads.map((payload) => `${payload.taskName} / ${payload.workerName} / ${payload.targetMainFlightNumber}`),
         });
       }
-      setSuccess(`${targetLabel}を${validRowCount}件登録しました。`);
+      setSuccess(`${targetLabel}を${validRowCount}件登録しました${skippedRows.length > 0 ? `。既存${skippedRows.length}件はスキップしました` : ""}。`);
       reset(false, false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "CSV取込に失敗しました。");
@@ -196,6 +220,12 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
             <option value="tasks">タスク</option>
           </select>
         </Field>
+        <Field label="取込モード">
+          <select value={importMode} onChange={(event) => setImportMode(event.target.value as ImportMode)}>
+            <option value="strict">すべて新規として確認</option>
+            <option value="skipExisting">既存はスキップ</option>
+          </select>
+        </Field>
         <Field label="CSVファイル">
           <input type="file" accept=".csv,text/csv" onChange={(event) => void handleFile(event.target.files?.[0])} />
         </Field>
@@ -216,10 +246,37 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
         <Metric label="ファイル" value={fileName || "-"} />
         <Metric label="行数" value={`${rows.length}件`} />
         <Metric label="登録可能" value={`${validRowCount}件`} />
-        <Metric label="要修正" value={`${validation.length + missingColumns.length}件`} />
+        <Metric label="スキップ" value={`${skippedRows.length}件`} />
+        <Metric label="要修正" value={`${issueCount}件`} />
       </div>
 
       {missingColumns.length > 0 ? <p className="alert">不足している列: {missingColumns.join("、")}</p> : null}
+      {skippedRows.length > 0 ? (
+        <section className="import-panel">
+          <h3>スキップ予定の行</h3>
+          <p className="helper-text">既に登録済みのため、上書きせずに取込対象から外します。</p>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>行</th>
+                  <th>内容</th>
+                  <th>理由</th>
+                </tr>
+              </thead>
+              <tbody>
+                {skippedRows.map((item) => (
+                  <tr key={`${item.rowNumber}-${item.label}`}>
+                    <td>{item.rowNumber}</td>
+                    <td>{item.label}</td>
+                    <td>{item.reason}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      ) : null}
       {importResult ? (
         <section className="import-panel import-result">
           <div className="import-panel-header">
@@ -275,14 +332,24 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           <div className="table-wrap">
             <table>
               <thead>
-                <tr>{headers.map((header) => <th key={header}>{header}</th>)}</tr>
+                <tr>
+                  <th>判定</th>
+                  {headers.map((header) => <th key={header}>{header}</th>)}
+                </tr>
               </thead>
               <tbody>
-                {rows.slice(0, 20).map((row, index) => (
-                  <tr key={`${fileName}-${index}`}>
-                    {headers.map((header) => <td key={header}>{row[header] || "-"}</td>)}
-                  </tr>
-                ))}
+                {rows.slice(0, 20).map((row, index) => {
+                  const rowNumber = index + 2;
+                  const previewStatus = getPreviewStatus(rowNumber, validationByRow, skippedByRow, missingColumns.length > 0);
+                  return (
+                    <tr key={`${fileName}-${index}`}>
+                      <td>
+                        <span className={`import-row-status ${previewStatus.tone}`}>{previewStatus.label}</span>
+                      </td>
+                      {headers.map((header) => <td key={header}>{row[header] || "-"}</td>)}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -300,6 +367,53 @@ function Metric({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function getPreviewStatus(
+  rowNumber: number,
+  validationByRow: Map<number, ValidationResult>,
+  skippedByRow: Map<number, SkippedRow>,
+  hasMissingColumns: boolean,
+): { label: string; tone: "ok" | "skip" | "error" } {
+  if (hasMissingColumns || validationByRow.has(rowNumber)) return { label: "要修正", tone: "error" };
+  if (skippedByRow.has(rowNumber)) return { label: "スキップ", tone: "skip" };
+  return { label: "登録予定", tone: "ok" };
+}
+
+function findSkippedRows(
+  kind: ImportKind,
+  rows: ParsedCsvRow[],
+  context: { routes: Route[]; tasks: Task[] },
+): SkippedRow[] {
+  return rows
+    .map((row, index): SkippedRow | null => {
+      if (kind === "routes") {
+        const flightNumber = normalize(row["便番号"]);
+        const routeName = normalize(row["便名"]);
+        const existing = flightNumber ? context.routes.find((route) => route.flightNumber === flightNumber) : undefined;
+        return existing
+          ? {
+              rowNumber: index + 2,
+              reason: "同じ対象日の便番号が既にあります",
+              label: [routeName || existing.routeName, flightNumber].filter(Boolean).join(" / "),
+            }
+          : null;
+      }
+
+      const taskName = normalize(row["タスク"]);
+      const targetRouteName = normalize(row["対象便名"]);
+      const targetFlightNumber = normalize(row["対象便番号"]);
+      const route = targetFlightNumber ? findTargetMainRoute(context.routes, targetFlightNumber, targetRouteName) : undefined;
+      const existing = route && taskName ? context.tasks.find((task) => task.targetMainRouteId === route.id && task.taskName === taskName) : undefined;
+      return existing
+        ? {
+            rowNumber: index + 2,
+            reason: "同じ対象便に同名タスクが既にあります",
+            label: [taskName, targetFlightNumber].filter(Boolean).join(" / "),
+          }
+        : null;
+    })
+    .filter((item): item is SkippedRow => item !== null);
 }
 
 function validateRows(
