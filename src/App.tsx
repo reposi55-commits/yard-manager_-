@@ -5,6 +5,7 @@ import { LoginScreen } from "./components/LoginScreen";
 import { DriverBoard } from "./features/DriverBoard";
 import { ExportView } from "./features/ExportView";
 import { FieldTaskBoard } from "./features/FieldTaskBoard";
+import { HistoryDataView } from "./features/HistoryDataView";
 import { ImportPreviewView } from "./features/ImportPreviewView";
 import { MasterManagement } from "./features/MasterManagement";
 import { OperationLogView } from "./features/OperationLogView";
@@ -31,6 +32,7 @@ export default function App() {
       <>
         {activeTab === "dashboard" ? <DashboardView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "analysis" ? <PerformanceAnalysisView user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "history" ? <HistoryDataView user={appUser} /> : null}
         {activeTab === "templates" ? <TemplateGenerationView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "routes" ? <RouteManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "tasks" ? <TaskManagement user={appUser} businessDate={businessDate} /> : null}

@@ -1,13 +1,14 @@
-import { BarChart3, CalendarDays, ClipboardList, Download, History, LogOut, MapPinned, RouteIcon, Smartphone, TrendingUp, Truck, Upload, UserCog, Users } from "lucide-react";
+import { Archive, BarChart3, CalendarDays, ClipboardList, Download, History, LogOut, MapPinned, RouteIcon, Smartphone, TrendingUp, Truck, Upload, UserCog, Users } from "lucide-react";
 import type { PropsWithChildren } from "react";
 import { DateSelector, SecondaryButton } from "./ui";
 import type { AppUser } from "../types";
 
-export type AdminTab = "dashboard" | "analysis" | "templates" | "routes" | "tasks" | "links" | "driver" | "exports" | "imports" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
+export type AdminTab = "dashboard" | "analysis" | "history" | "templates" | "routes" | "tasks" | "links" | "driver" | "exports" | "imports" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
 
 const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "dashboard", label: "ダッシュボード", icon: BarChart3 },
   { id: "analysis", label: "実績分析", icon: TrendingUp },
+  { id: "history", label: "過去データ", icon: Archive },
   { id: "templates", label: "テンプレート", icon: CalendarDays },
   { id: "routes", label: "便管理", icon: Truck },
   { id: "tasks", label: "タスク管理", icon: ClipboardList },
