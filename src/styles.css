@@ -562,6 +562,34 @@ th {
   margin-bottom: 18px;
 }
 
+.archive-export-panel {
+  display: grid;
+  gap: 14px;
+  margin-top: 22px;
+  padding-top: 20px;
+  border-top: 1px solid #d8e0e6;
+}
+
+.archive-filter {
+  margin-bottom: 0;
+}
+
+.archive-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.archive-summary span,
+.archive-summary strong {
+  padding: 8px 10px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
 .export-panel {
   min-height: 220px;
   display: flex;

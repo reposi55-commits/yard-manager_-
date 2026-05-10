@@ -3,6 +3,7 @@ import {
   collection,
   deleteField,
   doc,
+  getDocs,
   onSnapshot,
   query,
   setDoc,
@@ -85,6 +86,18 @@ export function subscribeCollection<T>(
     },
     (error) => onError(error.message),
   );
+}
+
+export async function fetchCollectionOnce<T>(
+  collectionName: string,
+  constraints: QueryConstraint[],
+  options: { includeDeleted?: boolean } = {},
+): Promise<T[]> {
+  const ref = collection(db, collectionName);
+  const snapshot = await getDocs(query(ref, ...constraints));
+  return snapshot.docs
+    .map((item) => mapDocument<T>(item.id, item.data()))
+    .filter((item) => options.includeDeleted || !(item as { deleted?: boolean }).deleted);
 }
 
 export function subscribeMasters<K extends "stations" | "lanes" | "workers">(
