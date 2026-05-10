@@ -20,32 +20,142 @@ service cloud.firestore {
       return activeUser() && userDoc().data.role == "admin";
     }
 
-    function sameSite() {
-      return !("siteId" in resource.data) || resource.data.siteId == userDoc().data.siteId;
+    function knownAppCollection(collectionName) {
+      return collectionName in ["stations", "lanes", "workers", "routes", "tasks", "routeLinks"];
+    }
+
+    function sameSiteResource() {
+      return resource.data.siteId == userDoc().data.siteId;
+    }
+
+    function sameSiteRequest() {
+      return request.resource.data.siteId == userDoc().data.siteId;
+    }
+
+    function statusOnlyUpdate() {
+      return sameSiteResource()
+        && request.resource.data.siteId == resource.data.siteId
+        && request.resource.data.businessDate == resource.data.businessDate
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "actualStartAt", "actualEndAt", "updatedAt", "updatedBy"]);
+    }
+
+    function workerOwnTaskStatusUpdate(collectionName) {
+      return activeUser()
+        && userDoc().data.role == "user"
+        && collectionName == "tasks"
+        && resource.data.workerId == userDoc().data.workerId
+        && request.resource.data.status in ["pending", "ready", "in_progress", "completed"]
+        && statusOnlyUpdate();
+    }
+
+    function targetTask() {
+      return get(/databases/$(database)/documents/tasks/$(request.resource.data.targetId));
+    }
+
+    function logMatchesCurrentTask() {
+      return exists(/databases/$(database)/documents/tasks/$(request.resource.data.targetId))
+        && targetTask().data.siteId == userDoc().data.siteId
+        && targetTask().data.businessDate == request.resource.data.businessDate
+        && targetTask().data.workerId == userDoc().data.workerId
+        && targetTask().data.status == request.resource.data.after.status;
+    }
+
+    function adminSameSiteCreate() {
+      return isAdmin() && sameSiteRequest();
+    }
+
+    function adminSameSiteUpdate() {
+      return isAdmin() && sameSiteResource() && sameSiteRequest();
+    }
+
+    function canReadAppDocument(collectionName) {
+      return knownAppCollection(collectionName)
+        && sameSiteResource()
+        && (isAdmin()
+          || (userDoc().data.role == "user"
+            && (collectionName != "tasks" || resource.data.workerId == userDoc().data.workerId)));
+    }
+
+    function userTaskStatusLog() {
+      return userDoc().data.role == "user"
+        && request.resource.data.keys().hasOnly(["siteId", "businessDate", "targetType", "targetId", "targetLabel", "action", "before", "after", "operatedBy", "operatedAt"])
+        && request.resource.data.targetType == "task"
+        && request.resource.data.action == "status_change"
+        && request.resource.data.before is map
+        && request.resource.data.after is map
+        && request.resource.data.operatedAt is timestamp
+        && request.resource.data.targetId == request.resource.data.before.id
+        && request.resource.data.targetId == request.resource.data.after.id
+        && request.resource.data.before.workerId == userDoc().data.workerId
+        && request.resource.data.after.workerId == userDoc().data.workerId
+        && request.resource.data.before.siteId == userDoc().data.siteId
+        && request.resource.data.after.siteId == userDoc().data.siteId
+        && logMatchesCurrentTask();
+    }
+
+    function adminUserProfileUpdate() {
+      return isAdmin()
+        && resource.data.siteId == userDoc().data.siteId
+        && request.resource.data.siteId == resource.data.siteId
+        && request.resource.data.businessDate == resource.data.businessDate
+        && request.resource.data.createdAt == resource.data.createdAt
+        && request.resource.data.createdBy == resource.data.createdBy
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["email", "displayName", "role", "active", "workerId", "updatedAt", "updatedBy"]);
+    }
+
+    function validUserProfileCreate() {
+      return isAdmin()
+        && request.resource.data.keys().hasOnly(["siteId", "businessDate", "email", "displayName", "role", "active", "workerId", "createdAt", "createdBy", "updatedAt", "updatedBy", "deleted"])
+        && request.resource.data.siteId == userDoc().data.siteId
+        && request.resource.data.businessDate == "global"
+        && request.resource.data.email is string
+        && request.resource.data.displayName is string
+        && request.resource.data.role in ["admin", "user"]
+        && request.resource.data.active is bool
+        && request.resource.data.deleted == false
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.updatedBy == request.auth.uid
+        && (request.resource.data.role == "admin" || request.resource.data.workerId is string)
+        && (request.resource.data.role == "user" || !("workerId" in request.resource.data));
     }
 
     match /users/{userId} {
-      allow read: if (signedIn() && request.auth.uid == userId) || isAdmin();
-      allow create, update, delete: if isAdmin();
+      allow read: if (signedIn() && request.auth.uid == userId)
+        || (isAdmin() && resource.data.siteId == userDoc().data.siteId);
+      allow create: if validUserProfileCreate();
+      allow update: if adminUserProfileUpdate();
+      allow delete: if false;
     }
 
     match /operationLogs/{logId} {
-      allow read: if isAdmin();
-      allow create: if activeUser() && request.resource.data.operatedBy == request.auth.uid;
+      allow read: if isAdmin() && resource.data.siteId == userDoc().data.siteId;
+      allow create: if activeUser()
+        && request.resource.data.operatedBy == request.auth.uid
+        && request.resource.data.siteId == userDoc().data.siteId
+        && (isAdmin() || userTaskStatusLog());
       allow update, delete: if false;
     }
 
+    match /dialTemplates/{templateId} {
+      allow read: if isAdmin() && sameSiteResource();
+      allow create: if adminSameSiteCreate();
+      allow update: if adminSameSiteUpdate();
+      allow delete: if false;
+    }
+
+    match /templateRuns/{runId} {
+      allow read: if isAdmin() && sameSiteResource();
+      allow create: if adminSameSiteCreate();
+      allow update: if adminSameSiteUpdate();
+      allow delete: if false;
+    }
+
     match /{collection}/{docId} {
-      allow read: if activeUser() && sameSite();
-      allow create: if isAdmin();
-      allow update: if isAdmin()
-        || (activeUser()
-          && collection in ["routes", "tasks"]
-          && resource.data.siteId == userDoc().data.siteId
-          && request.resource.data.siteId == resource.data.siteId
-          && request.resource.data.businessDate == resource.data.businessDate
-          && request.resource.data.updatedBy == request.auth.uid
-          && request.resource.data.diff(resource.data).changedKeys().hasOnly(["status", "actualStartAt", "actualEndAt", "updatedAt", "updatedBy"]));
+      allow read: if activeUser() && canReadAppDocument(collection);
+      allow create: if knownAppCollection(collection) && adminSameSiteCreate();
+      allow update: if knownAppCollection(collection)
+        && (adminSameSiteUpdate() || workerOwnTaskStatusUpdate(collection));
       allow delete: if false;
     }
   }

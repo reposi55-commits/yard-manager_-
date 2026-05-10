@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, DangerButton, EmptyState, Field, PrimaryButton } from "../components/ui";
+import { Card, DangerButton, EmptyState, Field, FormCheckPanel, PrimaryButton } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily } from "../services/firestoreService";
 import type { AppUser, Route, RouteLink } from "../types";
 
@@ -12,6 +12,10 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
 
   const subRoutes = useMemo(() => routes.filter((route) => route.type === "sub"), [routes]);
   const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
+  const formIssues = useMemo(
+    () => buildRouteLinkIssues(subRouteId, mainRouteId, subRoutes, mainRoutes, links),
+    [links, mainRouteId, mainRoutes, subRouteId, subRoutes],
+  );
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routeLinks", user.siteId, businessDate, setLinks, setError), [user.siteId, businessDate]);
@@ -19,18 +23,11 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
   async function save() {
     const sub = subRoutes.find((route) => route.id === subRouteId);
     const main = mainRoutes.find((route) => route.id === mainRouteId);
-    if (!sub || !main) {
-      setError("サブ便とメイン便を選択してください。");
+    if (formIssues.length > 0) {
+      setError(formIssues[0]);
       return;
     }
-    if (sub.id === main.id) {
-      setError("同じ便同士は紐付けできません。");
-      return;
-    }
-    if (links.some((link) => link.subRouteId === sub.id && link.mainRouteId === main.id)) {
-      setError("同じ紐付けがすでに存在します。");
-      return;
-    }
+    if (!sub || !main) return;
     try {
       await createEntity(
         "routeLinks",
@@ -54,10 +51,17 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
     }
   }
 
+  async function remove(link: RouteLink) {
+    const label = `${link.subRouteName} / ${link.subFlightNumber} → ${link.mainRouteName} / ${link.mainFlightNumber}`;
+    if (!window.confirm(`${label} の紐付けを削除しますか？`)) return;
+    await softDeleteEntity("routeLinks", link, user);
+  }
+
   return (
     <Card>
       <div className="section-header"><div><p className="eyebrow">Links</p><h2>サブ便とメイン便の紐付け</h2></div></div>
       {error ? <p className="alert">{error}</p> : null}
+      <FormCheckPanel issues={formIssues} warnings={[]} />
       <div className="form-grid inline-form">
         <Field label="サブ便">
           <select value={subRouteId} onChange={(e) => setSubRouteId(e.target.value)}>
@@ -71,7 +75,7 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
             {mainRoutes.map((route) => <option key={route.id} value={route.id}>{route.routeName} / {route.flightNumber}</option>)}
           </select>
         </Field>
-        <div className="form-actions"><PrimaryButton type="button" onClick={save} disabled={!subRouteId || !mainRouteId}>追加</PrimaryButton></div>
+        <div className="form-actions"><PrimaryButton type="button" onClick={save} disabled={formIssues.length > 0} title={formIssues[0] || ""}>追加</PrimaryButton></div>
       </div>
       {links.length === 0 ? <EmptyState message="便紐付けはまだありません。" /> : null}
       <div className="table-wrap">
@@ -82,7 +86,7 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
               <tr key={link.id}>
                 <td>{link.subRouteName} / {link.subFlightNumber}</td>
                 <td>{link.mainRouteName} / {link.mainFlightNumber}</td>
-                <td><DangerButton type="button" onClick={() => softDeleteEntity("routeLinks", link, user)}>削除</DangerButton></td>
+                <td><DangerButton type="button" onClick={() => remove(link)}>削除</DangerButton></td>
               </tr>
             ))}
           </tbody>
@@ -90,4 +94,25 @@ export function RouteLinkManagement({ user, businessDate }: { user: AppUser; bus
       </div>
     </Card>
   );
+}
+
+function buildRouteLinkIssues(
+  subRouteId: string,
+  mainRouteId: string,
+  subRoutes: Route[],
+  mainRoutes: Route[],
+  links: RouteLink[],
+): string[] {
+  const issues: string[] = [];
+  const sub = subRoutes.find((route) => route.id === subRouteId);
+  const main = mainRoutes.find((route) => route.id === mainRouteId);
+  if (!subRouteId) issues.push("サブ便を選択してください。");
+  if (!mainRouteId) issues.push("メイン便を選択してください。");
+  if (subRouteId && !sub) issues.push("選択したサブ便が見つかりません。");
+  if (mainRouteId && !main) issues.push("選択したメイン便が見つかりません。");
+  if (sub && main && sub.id === main.id) issues.push("同じ便同士は紐付けできません。");
+  if (sub && main && links.some((link) => link.subRouteId === sub.id && link.mainRouteId === main.id)) {
+    issues.push("同じ紐付けがすでに存在します。");
+  }
+  return issues;
 }

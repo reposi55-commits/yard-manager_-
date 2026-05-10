@@ -5,7 +5,17 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "siteId", "order": "ASCENDING" },
-        { "fieldPath": "businessDate", "order": "ASCENDING" }
+        { "fieldPath": "businessDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
+      "collectionGroup": "tasks",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "siteId", "order": "ASCENDING" },
+        { "fieldPath": "businessDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
@@ -22,7 +32,8 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "siteId", "order": "ASCENDING" },
-        { "fieldPath": "businessDate", "order": "ASCENDING" }
+        { "fieldPath": "businessDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     },
     {
@@ -30,7 +41,8 @@
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "siteId", "order": "ASCENDING" },
-        { "fieldPath": "businessDate", "order": "ASCENDING" }
+        { "fieldPath": "businessDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
       ]
     }
   ],

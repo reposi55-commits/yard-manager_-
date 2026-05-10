@@ -3,6 +3,7 @@ import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } 
 import { changeRouteStatus, subscribeDaily, subscribeMasters } from "../services/firestoreService";
 import type { AppUser, Route, Station } from "../types";
 import { BUSINESS_DAY_MINUTES, formatTimestamp, offsetMinToLabel } from "../utils/date";
+import { routeStatusLabels } from "../utils/status";
 
 const timeTicks = Array.from({ length: 13 }, (_, index) => index * 120);
 
@@ -17,18 +18,25 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
 
   const groupedStations = useMemo(() => {
     const groups = new Map<string, Station[]>();
-    stations.filter((station) => station.active).forEach((station) => {
+    const routeStationIds = new Set(routes.map((route) => route.stationId));
+    stations.filter((station) => station.active || routeStationIds.has(station.id)).forEach((station) => {
       const area = station.area || "未設定エリア";
       groups.set(area, [...(groups.get(area) || []), station]);
     });
     return [...groups.entries()];
-  }, [stations]);
+  }, [stations, routes]);
 
   return (
     <Card>
       <div className="section-header"><div><p className="eyebrow">Driver Board</p><h2>ステーション別ガント</h2></div></div>
       {error ? <p className="alert">{error}</p> : null}
       {routes.length === 0 ? <EmptyState message="この対象日の便はまだありません。" /> : null}
+      <div className="gantt-legend">
+        <span className="legend-waiting">{routeStatusLabels.waiting}</span>
+        <span className="legend-in-progress">{routeStatusLabels.in_progress}</span>
+        <span className="legend-completed">{routeStatusLabels.completed}</span>
+        <span className="legend-actual">実績あり</span>
+      </div>
       <div className="gantt-wrap">
         <div className="gantt-time">
           <div className="station-label-head">ステーション</div>
@@ -43,7 +51,10 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
               const stationRoutes = routes.filter((route) => route.stationId === station.id);
               return (
                 <div className="gantt-row" key={station.id}>
-                  <div className="station-label">{station.name}</div>
+                  <div className="station-label">
+                    {station.name}
+                    {!station.active ? <small>無効</small> : null}
+                  </div>
                   <div className="gantt-lane">
                     {stationRoutes.map((route) => {
                       const start = Math.max(0, route.plannedStartOffsetMin);
@@ -52,12 +63,15 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
                         <button
                           key={route.id}
                           type="button"
-                          className={`route-bar route-${route.status}`}
+                          className={`route-bar route-${route.status} ${route.actualStartAt ? "route-has-start" : ""} ${route.actualEndAt ? "route-has-end" : ""}`}
                           style={{ left: `${(start / BUSINESS_DAY_MINUTES) * 100}%`, width: `${((end - start) / BUSINESS_DAY_MINUTES) * 100}%` }}
+                          title={`${route.routeName} / ${route.flightNumber} / ${routeStatusLabels[route.status]}`}
                           onClick={() => setSelected(route)}
                         >
                           <span>{route.routeName}</span>
                           <small>{route.flightNumber}</small>
+                          <em>{routeStatusLabels[route.status]}</em>
+                          {route.actualStartAt ? <strong>{route.actualEndAt ? "実績完了" : "実績開始"}</strong> : null}
                         </button>
                       );
                     })}

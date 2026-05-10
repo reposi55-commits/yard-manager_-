@@ -8,8 +8,12 @@
     "build": "tsc -b && vite build",
     "lint": "tsc --noEmit",
     "preview": "vite preview --host=0.0.0.0",
+    "seed:masters": "node scripts/seedMasters.mjs",
+    "seed:demo": "node scripts/seedMasters.mjs",
+    "test:rules": "npx firebase-tools emulators:exec --project yardmanager-rules-test --only firestore \"node scripts/testFirestoreRules.mjs\"",
     "deploy": "npx firebase-tools deploy --project new-yard-kanri --only hosting,firestore:rules,firestore:indexes",
-    "deploy:hosting": "npx firebase-tools deploy --project new-yard-kanri --only hosting"
+    "deploy:hosting": "npx firebase-tools deploy --project new-yard-kanri --only hosting",
+    "deploy:rules": "npx firebase-tools deploy --project new-yard-kanri --only firestore:rules"
   },
   "dependencies": {
     "@vitejs/plugin-react": "^5.0.4",
@@ -20,6 +24,7 @@
     "vite": "^6.2.3"
   },
   "devDependencies": {
+    "@firebase/rules-unit-testing": "^5.0.1",
     "@types/node": "^22.14.0",
     "@types/react": "^19.0.8",
     "@types/react-dom": "^19.0.3",

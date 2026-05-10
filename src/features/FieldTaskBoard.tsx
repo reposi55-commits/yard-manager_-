@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
-import { changeTaskStatus, subscribeDaily, subscribeWorkerTasks } from "../services/firestoreService";
-import type { AppUser, Route, RouteLink, Task, TaskStatus } from "../types";
+import { Card, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { changeTaskStatus, subscribeDaily, subscribeMasters, subscribeWorkerTasks } from "../services/firestoreService";
+import type { AppUser, Route, RouteLink, Task, TaskStatus, Worker } from "../types";
 import { formatTimestamp, isBeforePlannedStart } from "../utils/date";
+import { routeStatusLabels } from "../utils/status";
 
 type TaskView = {
   task: Task;
@@ -17,14 +18,31 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
   const [routes, setRoutes] = useState<Route[]>([]);
   const [links, setLinks] = useState<RouteLink[]>([]);
   const [selected, setSelected] = useState<TaskView | null>(null);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [error, setError] = useState("");
+  const isAdminPreview = user.role === "admin";
+  const activeWorkers = useMemo(() => workers.filter((worker) => worker.active), [workers]);
+  const targetWorkerId = isAdminPreview ? selectedWorkerId : user.workerId;
 
   useEffect(() => {
-    if (!user.workerId) return undefined;
-    return subscribeWorkerTasks(user.siteId, businessDate, user.workerId, setTasks, setError);
-  }, [user.siteId, user.workerId, businessDate]);
+    if (!targetWorkerId) {
+      setTasks([]);
+      return undefined;
+    }
+    return subscribeWorkerTasks(user.siteId, businessDate, targetWorkerId, setTasks, setError);
+  }, [user.siteId, targetWorkerId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routeLinks", user.siteId, businessDate, setLinks, setError), [user.siteId, businessDate]);
+  useEffect(() => {
+    if (!isAdminPreview) return undefined;
+    return subscribeMasters("workers", user.siteId, setWorkers, setError);
+  }, [isAdminPreview, user.siteId]);
+  useEffect(() => {
+    if (!isAdminPreview) return;
+    if (selectedWorkerId && activeWorkers.some((worker) => worker.id === selectedWorkerId)) return;
+    setSelectedWorkerId(activeWorkers[0]?.id || "");
+  }, [activeWorkers, isAdminPreview, selectedWorkerId]);
 
   const views = useMemo<TaskView[]>(() => {
     return tasks
@@ -44,6 +62,18 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
       .sort((a, b) => a.sortRank - b.sortRank || a.task.plannedStartOffsetMin - b.task.plannedStartOffsetMin);
   }, [tasks, links, routes]);
 
+  const groupedViews = useMemo(
+    () =>
+      [
+        { key: "in_progress", title: "作業中", views: views.filter((view) => view.task.status === "in_progress") },
+        { key: "ready", title: "開始可能", views: views.filter((view) => !view.blocked && view.task.status === "ready") },
+        { key: "pending", title: "未開始", views: views.filter((view) => !view.blocked && view.task.status === "pending") },
+        { key: "blocked", title: "前工程待ち", views: views.filter((view) => view.blocked && view.task.status !== "in_progress" && view.task.status !== "completed") },
+        { key: "completed", title: "完了", views: views.filter((view) => view.task.status === "completed") },
+      ].filter((group) => group.views.length > 0),
+    [views],
+  );
+
   async function updateStatus(view: TaskView, status: TaskStatus) {
     if (status === "in_progress") {
       if (view.blocked) return;
@@ -53,7 +83,7 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
     setSelected(null);
   }
 
-  if (!user.workerId) {
+  if (!isAdminPreview && !user.workerId) {
     return (
       <Card className="field-board">
         <p className="alert">この一般ユーザーにはworkerIdが設定されていません。usersドキュメントに作業員IDを設定してください。</p>
@@ -64,24 +94,54 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
   return (
     <div className="field-board">
       {error ? <p className="alert">{error}</p> : null}
+      {isAdminPreview ? (
+        <section className="field-worker-selector">
+          <Field label="確認する作業員">
+            <select value={selectedWorkerId} onChange={(event) => setSelectedWorkerId(event.target.value)}>
+              {activeWorkers.length === 0 ? <option value="">有効な作業員がありません</option> : null}
+              {activeWorkers.map((worker) => (
+                <option value={worker.id} key={worker.id}>
+                  {worker.displayName || worker.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="helper-text">管理者用のスマホ表示確認です。実際の一般ユーザー画面と同じ作業カードを表示します。</p>
+        </section>
+      ) : null}
       {views.length === 0 ? <EmptyState message="自分に割り当てられた作業はありません。" /> : null}
       <div className="task-card-list">
-        {views.map((view) => (
-          <button key={view.task.id} type="button" className="task-card" onClick={() => setSelected(view)}>
-            <div className="task-card-top">
-              <div>
-                <p className="task-time">{view.task.plannedStartLabel} - {view.task.plannedEndLabel}</p>
-                <h2>{view.task.taskName}</h2>
-              </div>
-              <StatusBadge type="task" status={view.task.status} blocked={view.blocked} label={view.displayLabel} />
+        {groupedViews.map((group) => (
+          <section className="task-section" key={group.key}>
+            <div className="task-section-header">
+              <h2>{group.title}</h2>
+              <span>{group.views.length}件</span>
             </div>
-            <div className="task-info-grid">
-              <span>レーン</span><strong>{view.task.laneName || "-"}</strong>
-              <span>対象便</span><strong>{view.task.targetMainRouteName} {view.task.targetMainFlightNumber}</strong>
-              <span>前工程</span><strong>{view.blocked ? "未完了のサブ便あり" : "開始条件OK"}</strong>
+            <div className="task-section-list">
+              {group.views.map((view) => (
+                <button key={view.task.id} type="button" className="task-card" onClick={() => setSelected(view)}>
+                  <div className="task-card-top">
+                    <div>
+                      <p className="task-time">{view.task.plannedStartLabel} - {view.task.plannedEndLabel}</p>
+                      <h2>{view.task.taskName}</h2>
+                    </div>
+                    <StatusBadge type="task" status={view.task.status} blocked={view.blocked} label={view.displayLabel} />
+                  </div>
+                  <div className="task-info-grid">
+                    <span>レーン</span><strong>{view.task.laneName || "-"}</strong>
+                    <span>対象便</span><strong>{view.task.targetMainRouteName} {view.task.targetMainFlightNumber}</strong>
+                    <span>前工程</span><strong>{view.blocked ? "未完了のサブ便あり" : "開始条件OK"}</strong>
+                  </div>
+                  {view.task.actualStartAt || view.task.actualEndAt ? (
+                    <p className="task-actual-line">
+                      開始 {formatTimeOnly(view.task.actualStartAt)} / 完了 {formatTimeOnly(view.task.actualEndAt)}
+                    </p>
+                  ) : null}
+                  {view.task.instruction ? <p className="instruction">{view.task.instruction}</p> : null}
+                </button>
+              ))}
             </div>
-            {view.task.instruction ? <p className="instruction">{view.task.instruction}</p> : null}
-          </button>
+          </section>
         ))}
       </div>
       {selected ? (
@@ -107,7 +167,12 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
             <div><span>ステータス</span><StatusBadge type="task" status={selected.task.status} blocked={selected.blocked} label={selected.displayLabel} /></div>
             <div><span>開始実績</span><strong>{formatTimestamp(selected.task.actualStartAt)}</strong></div>
             <div><span>完了実績</span><strong>{formatTimestamp(selected.task.actualEndAt)}</strong></div>
-            {selected.subRoutes.length > 0 ? <div><span>関連サブ便</span><strong>{selected.subRoutes.map((route) => `${route.routeName}:${route.status}`).join(" / ")}</strong></div> : null}
+            {selected.subRoutes.length > 0 ? (
+              <div>
+                <span>関連サブ便</span>
+                <strong>{selected.subRoutes.map((route) => `${route.routeName}:${routeStatusLabels[route.status]}`).join(" / ")}</strong>
+              </div>
+            ) : null}
             {selected.task.instruction ? <p className="instruction detail-instruction">{selected.task.instruction}</p> : null}
           </div>
         </Modal>
@@ -130,4 +195,10 @@ function getSortRank(task: Task, blocked: boolean): number {
   if (!blocked && task.status === "pending") return 3;
   if (blocked) return 4;
   return 5;
+}
+
+function formatTimeOnly(value: Task["actualStartAt"]): string {
+  const timestamp = formatTimestamp(value);
+  if (timestamp === "-") return "-";
+  return timestamp.split(" ")[1] || timestamp;
 }
