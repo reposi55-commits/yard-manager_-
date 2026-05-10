@@ -303,6 +303,7 @@ Phase 2の受入確認は、次のドキュメントを基準に行います。
 - [Phase 2残り確認チェックリスト](docs/PHASE2_REMAINING_CHECKS.md)
 - [YardManager本番運用手順書](docs/OPERATION_MANUAL.md)
 - [データ保管・過去データ運用方針](docs/DATA_RETENTION_POLICY.md)
+- [Phase 3 ダイヤテンプレート管理 実装計画](docs/PHASE3_TEMPLATE_MANAGEMENT_PLAN.md)
 
 ローカルで確認する場合:
 
@@ -318,6 +319,7 @@ npm.cmd run test:rules
 
 詳しい優先度と判断ポイントは、[Phase 3候補整理](docs/PHASE3_CANDIDATES.md)にまとめています。
 
+- ダイヤテンプレートそのものの作成・編集・複製・無効化
 - 既存データを上書きするCSV取込モード
 - 本格的なExcel `.xlsx` 出力
 - ダッシュボード/分析の期間比較
