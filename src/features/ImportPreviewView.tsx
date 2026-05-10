@@ -139,6 +139,16 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     downloadCsv(`yardmanager-import-errors-${kind}-${businessDate}.csv`, errorRows);
   }
 
+  function downloadSkippedRows() {
+    const skippedCsvRows = skippedRows.map((item) => ({
+      行: item.rowNumber,
+      理由: item.reason,
+      内容: item.label,
+      ...rows[item.rowNumber - 2],
+    }));
+    downloadCsv(`yardmanager-import-skipped-${kind}-${businessDate}.csv`, skippedCsvRows);
+  }
+
   async function importRows() {
     setError("");
     setSuccess("");
@@ -253,7 +263,12 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
       {missingColumns.length > 0 ? <p className="alert">不足している列: {missingColumns.join("、")}</p> : null}
       {skippedRows.length > 0 ? (
         <section className="import-panel">
-          <h3>スキップ予定の行</h3>
+          <div className="import-panel-header">
+            <h3>スキップ予定の行</h3>
+            <SecondaryButton type="button" onClick={downloadSkippedRows}>
+              スキップ行CSV出力
+            </SecondaryButton>
+          </div>
           <p className="helper-text">既に登録済みのため、上書きせずに取込対象から外します。</p>
           <div className="table-wrap">
             <table>
