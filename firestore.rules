@@ -137,6 +137,20 @@ service cloud.firestore {
       allow update, delete: if false;
     }
 
+    match /dialTemplates/{templateId} {
+      allow read: if isAdmin() && sameSiteResource();
+      allow create: if adminSameSiteCreate();
+      allow update: if adminSameSiteUpdate();
+      allow delete: if false;
+    }
+
+    match /templateRuns/{runId} {
+      allow read: if isAdmin() && sameSiteResource();
+      allow create: if adminSameSiteCreate();
+      allow update: if adminSameSiteUpdate();
+      allow delete: if false;
+    }
+
     match /{collection}/{docId} {
       allow read: if activeUser() && canReadAppDocument(collection);
       allow create: if knownAppCollection(collection) && adminSameSiteCreate();

@@ -36,6 +36,8 @@ const targetTypeByCollection: Record<CollectionName, LogTargetType> = {
   routes: "route",
   tasks: "task",
   routeLinks: "routeLink",
+  dialTemplates: "dialTemplate",
+  templateRuns: "templateRun",
 };
 
 function buildTargetLabel(collectionName: CollectionName, value: Record<string, unknown>): string {
@@ -53,6 +55,8 @@ function buildTargetLabel(collectionName: CollectionName, value: Record<string, 
     const main = [value.mainRouteName, value.mainFlightNumber].filter(Boolean).join(" / ");
     return [sub, main].filter(Boolean).join(" → ");
   }
+  if (collectionName === "dialTemplates") return String(value.name || "");
+  if (collectionName === "templateRuns") return String(value.templateRunLabel || value.templateName || "");
   return "";
 }
 

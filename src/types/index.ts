@@ -4,7 +4,7 @@ export type UserRole = "admin" | "user";
 export type RouteStatus = "waiting" | "in_progress" | "completed";
 export type TaskStatus = "pending" | "ready" | "in_progress" | "completed";
 export type RouteType = "main" | "sub";
-export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink";
+export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink" | "dialTemplate" | "templateRun";
 export type LogAction = "create" | "update" | "delete" | "status_change";
 
 export type FirestoreDate = Timestamp | null;
@@ -64,6 +64,10 @@ export interface Route extends BaseRecord {
   status: RouteStatus;
   actualStartAt?: FirestoreDate;
   actualEndAt?: FirestoreDate;
+  templateId?: string;
+  templateName?: string;
+  templateRunId?: string;
+  templateRunLabel?: string;
 }
 
 export interface Task extends BaseRecord {
@@ -83,6 +87,10 @@ export interface Task extends BaseRecord {
   status: TaskStatus;
   actualStartAt?: FirestoreDate;
   actualEndAt?: FirestoreDate;
+  templateId?: string;
+  templateName?: string;
+  templateRunId?: string;
+  templateRunLabel?: string;
 }
 
 export interface RouteLink extends BaseRecord {
@@ -92,6 +100,51 @@ export interface RouteLink extends BaseRecord {
   mainRouteId: string;
   mainRouteName: string;
   mainFlightNumber: string;
+  templateId?: string;
+  templateName?: string;
+  templateRunId?: string;
+  templateRunLabel?: string;
+}
+
+export interface DialTemplateRoute {
+  key: string;
+  type: RouteType;
+  routeName: string;
+  flightNumber: string;
+  stationName: string;
+  start: string;
+  end: string;
+}
+
+export interface DialTemplateTask {
+  taskName: string;
+  routeKey: string;
+  workerName: string;
+  laneName: string;
+  start: string;
+  end: string;
+  instruction: string;
+}
+
+export interface DialTemplate extends BaseRecord {
+  name: string;
+  description: string;
+  active: boolean;
+  routes: DialTemplateRoute[];
+  tasks: DialTemplateTask[];
+}
+
+export interface TemplateRun extends BaseRecord {
+  templateId: string;
+  templateName: string;
+  templateRunLabel: string;
+  startDate: string;
+  endDate: string;
+  days: number;
+  routeCount: number;
+  taskCount: number;
+  mode: "create" | "recreate" | "delete";
+  status: "completed" | "partially_failed";
 }
 
 export interface OperationLog {
@@ -115,4 +168,6 @@ export type EntityMap = {
   routes: Route;
   tasks: Task;
   routeLinks: RouteLink;
+  dialTemplates: DialTemplate;
+  templateRuns: TemplateRun;
 };

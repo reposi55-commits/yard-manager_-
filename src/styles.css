@@ -887,6 +887,67 @@ th {
   margin: 18px 0;
 }
 
+.batch-toolbar {
+  grid-template-columns: repeat(4, minmax(180px, 1fr)) auto;
+}
+
+.template-mode-tabs {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  margin-top: 16px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #eef3f6;
+}
+
+.template-mode-tabs button {
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #53677a;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.template-mode-tabs button.active {
+  background: #ffffff;
+  color: #142033;
+  box-shadow: 0 1px 4px rgba(16, 35, 55, 0.12);
+}
+
+.template-management {
+  display: grid;
+  grid-template-columns: minmax(0, 1.25fr) minmax(320px, 0.85fr);
+  gap: 16px;
+  margin-top: 18px;
+}
+
+.template-edit-section {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.template-row-editor {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr)) auto;
+  gap: 12px;
+  align-items: end;
+  padding: 12px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.row-action-cell {
+  display: flex;
+  align-items: end;
+  justify-content: flex-end;
+}
+
 .template-summary {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1371,8 +1432,26 @@ th {
   .template-toolbar,
   .template-summary,
   .template-grid,
+  .template-management,
+  .template-row-editor,
   .template-result-grid {
     grid-template-columns: 1fr;
+  }
+
+  .template-mode-tabs {
+    width: 100%;
+  }
+
+  .template-mode-tabs button {
+    flex: 1;
+  }
+
+  .row-action-cell {
+    justify-content: stretch;
+  }
+
+  .row-action-cell .btn {
+    width: 100%;
   }
 
   .import-actions {

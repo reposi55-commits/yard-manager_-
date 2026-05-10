@@ -138,6 +138,20 @@ async function seedData() {
       workerId: "worker-2",
       workerName: "作業員B",
     });
+    await setDoc(doc(db, "dialTemplates", "template-1"), {
+      active: true,
+      businessDate: "global",
+      createdAt: now,
+      createdBy: "admin-user",
+      deleted: false,
+      description: "テスト用テンプレート",
+      name: "標準テンプレート",
+      routes: [],
+      siteId,
+      tasks: [],
+      updatedAt: now,
+      updatedBy: "admin-user",
+    });
   });
 }
 
@@ -162,6 +176,52 @@ test("管理者は同一siteIdの計画データを作成できる", async () =>
     name: "北ヤード2",
     siteId,
     sortOrder: 2,
+    updatedAt: now,
+    updatedBy: "admin-user",
+  }));
+});
+
+test("管理者は同一siteIdのダイヤテンプレートを作成できる", async () => {
+  const db = dbFor("admin-user");
+  await assertSucceeds(setDoc(doc(db, "dialTemplates", "template-new"), {
+    active: true,
+    businessDate: "global",
+    createdAt: now,
+    createdBy: "admin-user",
+    deleted: false,
+    description: "追加テンプレート",
+    name: "追加テンプレート",
+    routes: [],
+    siteId,
+    tasks: [],
+    updatedAt: now,
+    updatedBy: "admin-user",
+  }));
+});
+
+test("一般ユーザーはダイヤテンプレートを読めない", async () => {
+  const db = dbFor("worker-user");
+  await assertFails(getDoc(doc(db, "dialTemplates", "template-1")));
+});
+
+test("管理者はテンプレート実行履歴を作成できる", async () => {
+  const db = dbFor("admin-user");
+  await assertSucceeds(setDoc(doc(db, "templateRuns", "template-run-1"), {
+    businessDate: "global",
+    createdAt: now,
+    createdBy: "admin-user",
+    days: 1,
+    deleted: false,
+    endDate: businessDate,
+    mode: "create",
+    routeCount: 1,
+    siteId,
+    startDate: businessDate,
+    status: "completed",
+    taskCount: 1,
+    templateId: "template-1",
+    templateName: "標準テンプレート",
+    templateRunLabel: "標準テンプレート 2026-05-10 - 2026-05-10",
     updatedAt: now,
     updatedBy: "admin-user",
   }));
