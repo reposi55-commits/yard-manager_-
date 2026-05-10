@@ -206,6 +206,7 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
   const batchCountText = selected
     ? `対象日 ${days.length}日 / 便 ${days.length * selected.routes.length}件 / タスク ${days.length * selected.tasks.length}件`
     : "テンプレート未選択";
+  const batchImpact = selected ? buildBatchImpact(selected, days.length, batchMode) : null;
   const templateImportItems = useMemo(
     () => buildTemplateImportItems(templateCsvRows, templates, activeStations, activeLanes, activeWorkers),
     [templateCsvRows, templates, activeStations, activeLanes, activeWorkers],
@@ -498,6 +499,15 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
               <strong>実績なしデータだけ対象</strong>
             </div>
           </section>
+          {batchImpact ? (
+            <section className={`form-check-panel ${batchImpact.tone}`}>
+              <strong>{batchImpact.title}</strong>
+              <p>{batchImpact.description}</p>
+              <ul>
+                {batchImpact.notes.map((note) => <li key={note}>{note}</li>)}
+              </ul>
+            </section>
+          ) : null}
           {selected ? <TemplatePreview template={selected} /> : <EmptyState message="有効なテンプレートがありません。" />}
         </>
       ) : (
@@ -575,8 +585,13 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
             <div><span>対象日数</span><strong>{plan.days.length}日</strong></div>
             <div><span>モード</span><strong>{batchModeLabel(batchMode)}</strong></div>
             <div><span>既存対象</span><strong>便 {plan.existingRoutes.length}件 / タスク {plan.existingTasks.length}件</strong></div>
+            <div><span>作成予定</span><strong>便 {batchMode === "delete" ? 0 : plan.days.length * selected.routes.length}件 / タスク {batchMode === "delete" ? 0 : plan.days.length * selected.tasks.length}件</strong></div>
+            <div><span>削除予定</span><strong>便 {batchMode === "create" ? 0 : plan.existingRoutes.length}件 / タスク {batchMode === "create" ? 0 : plan.existingTasks.length}件</strong></div>
             <div><span>実績あり</span><strong>{plan.protectedRoutes.length + plan.protectedTasks.length}件</strong></div>
           </div>
+          <p className="helper-text">
+            再作成/上書きは「実績なしの既存計画を論理削除してから、新しい計画を作成」します。実績がある便・タスクは保護されます。
+          </p>
           {plan.issues.length > 0 ? (
             <div className="form-check-panel error">
               <strong>実行できません</strong>
@@ -1287,6 +1302,44 @@ function hasRouteActual(route: Route): boolean {
 
 function hasTaskActual(task: Task): boolean {
   return Boolean(task.actualStartAt || task.actualEndAt || task.status === "in_progress" || task.status === "completed");
+}
+
+function buildBatchImpact(
+  template: DialTemplate,
+  dayCount: number,
+  mode: BatchMode,
+): { title: string; description: string; notes: string[]; tone: "warning" | "error" } {
+  const routeCount = dayCount * template.routes.length;
+  const taskCount = dayCount * template.tasks.length;
+  const notes = [
+    `対象日数は${dayCount}日、作成予定は便${mode === "delete" ? 0 : routeCount}件・タスク${mode === "delete" ? 0 : taskCount}件です。`,
+    "実行前チェックで、対象期間の既存計画と実績有無を確認します。",
+  ];
+
+  if (mode === "create") {
+    return {
+      title: "新規作成の確認",
+      description: "既存の便番号と重なる場合は、実行前チェックで止めます。",
+      notes,
+      tone: "warning",
+    };
+  }
+
+  if (mode === "recreate") {
+    return {
+      title: "再作成/上書きの確認",
+      description: "実績なしの既存計画だけを論理削除し、同じ期間へ作り直します。",
+      notes: [...notes, "作業開始済み・完了済み・実績時刻ありのデータが含まれる場合は実行できません。"],
+      tone: "warning",
+    };
+  }
+
+  return {
+    title: "一括削除の確認",
+    description: "テンプレートから作成された実績なし計画だけを論理削除します。新しい計画は作成しません。",
+    notes: [...notes, "削除後に必要な場合は、新規作成モードで再作成してください。"],
+    tone: "error",
+  };
 }
 
 function batchModeLabel(mode: BatchMode): string {

@@ -64,6 +64,7 @@ const requiredColumns: Record<ImportKind, string[]> = {
   routes: ["種別", "便名", "便番号", "ステーション名", "予定開始", "予定終了"],
   tasks: ["タスク", "作業員名", "レーン名", "対象便名", "対象便番号", "予定開始", "予定終了"],
 };
+const optionalBusinessDateColumn = "対象日";
 
 export function ImportPreviewView({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [kind, setKind] = useState<ImportKind>("routes");
@@ -98,8 +99,11 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   const skippedByRow = useMemo(() => new Map(skippedRows.map((row) => [row.rowNumber, row])), [skippedRows]);
   const skippedRowNumbers = useMemo(() => new Set(skippedRows.map((row) => row.rowNumber)), [skippedRows]);
   const validation = useMemo(
-    () => validateRows(kind, rows, { routes, tasks, stations, lanes, workers }).filter((item) => !skippedRowNumbers.has(item.rowNumber)),
-    [kind, rows, routes, tasks, stations, lanes, workers, skippedRowNumbers],
+    () =>
+      validateRows(kind, rows, { routes, tasks, stations, lanes, workers, businessDate }).filter(
+        (item) => !skippedRowNumbers.has(item.rowNumber),
+      ),
+    [kind, rows, routes, tasks, stations, lanes, workers, businessDate, skippedRowNumbers],
   );
   const validationByRow = useMemo(() => new Map(validation.map((item) => [item.rowNumber, item])), [validation]);
   const importableRows = useMemo(
@@ -112,6 +116,24 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   const validRowCount = importableRows.length;
   const issueCount = validation.length + missingColumns.length;
   const previewIssueCount = missingColumns.length > 0 ? rows.length : validation.length;
+  const currentExistingCount = kind === "routes" ? routes.length : tasks.length;
+  const estimatedAfterCount = currentExistingCount + validRowCount;
+  const csvTargetDates = useMemo(
+    () => [...new Set(rows.map((row) => normalize(row[optionalBusinessDateColumn])).filter(Boolean))],
+    [rows],
+  );
+  const safetyNotes = useMemo(
+    () =>
+      buildSafetyNotes({
+        kind,
+        businessDate,
+        validRowCount,
+        skippedRowCount: skippedRows.length,
+        currentExistingCount,
+        csvTargetDates,
+      }),
+    [kind, businessDate, validRowCount, skippedRows.length, currentExistingCount, csvTargetDates],
+  );
   const baseImportBlockReason = getImportBlockReason({
     rowCount: rows.length,
     missingColumnCount: missingColumns.length,
@@ -162,9 +184,9 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
 
   function downloadTemplate() {
     if (kind === "routes") {
-      downloadCsv("yardmanager-import-routes-template.csv", routeTemplate);
+      downloadCsv("yardmanager-import-routes-template.csv", withBusinessDate(routeTemplate, businessDate));
     } else {
-      downloadCsv("yardmanager-import-tasks-template.csv", taskTemplate);
+      downloadCsv("yardmanager-import-tasks-template.csv", withBusinessDate(taskTemplate, businessDate));
     }
   }
 
@@ -361,6 +383,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
         <Metric label="登録可能" value={`${validRowCount}件`} />
         <Metric label="スキップ" value={`${skippedRows.length}件`} />
         <Metric label="要修正" value={`${issueCount}件`} />
+        <Metric label="登録後目安" value={`${estimatedAfterCount}件`} />
       </div>
 
       {rows.length > 0 ? (
@@ -370,6 +393,11 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
             対象日 {businessDate} に{kind === "routes" ? "便" : "タスク"}を{validRowCount}件新規登録します。
             既存データは上書きしません{skippedRows.length > 0 ? `（既存${skippedRows.length}件はスキップ）` : ""}。
           </p>
+          {safetyNotes.length > 0 ? (
+            <ul>
+              {safetyNotes.map((note) => <li key={note}>{note}</li>)}
+            </ul>
+          ) : null}
           <label className="check-row">
             <input
               type="checkbox"
@@ -523,9 +551,19 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
             <div><span>取込対象</span><strong>{kind === "routes" ? "便" : "タスク"}</strong></div>
             <div><span>新規登録</span><strong>{validRowCount}件</strong></div>
             <div><span>スキップ</span><strong>{skippedRows.length}件</strong></div>
+            <div><span>現在登録済み</span><strong>{currentExistingCount}件</strong></div>
+            <div><span>登録後目安</span><strong>{estimatedAfterCount}件</strong></div>
             <div><span>上書き</span><strong>しません</strong></div>
           </div>
-          <p className="helper-text">対象日と件数が正しいことを確認してから登録します。</p>
+          {safetyNotes.length > 0 ? (
+            <div className="form-check-panel warning">
+              <strong>確認ポイント</strong>
+              <ul>
+                {safetyNotes.map((note) => <li key={note}>{note}</li>)}
+              </ul>
+            </div>
+          ) : null}
+          <p className="helper-text">対象日と件数が正しいことを確認してから登録します。取込後に戻す場合は、対象日の便管理・タスク管理から論理削除します。</p>
         </Modal>
       ) : null}
     </Card>
@@ -581,6 +619,45 @@ function getImportBlockReason({
   return "";
 }
 
+function withBusinessDate<T extends ParsedCsvRow>(rows: T[], businessDate: string): Array<T & { 対象日: string }> {
+  return rows.map((row) => ({ 対象日: businessDate, ...row }));
+}
+
+function buildSafetyNotes({
+  kind,
+  businessDate,
+  validRowCount,
+  skippedRowCount,
+  currentExistingCount,
+  csvTargetDates,
+}: {
+  kind: ImportKind;
+  businessDate: string;
+  validRowCount: number;
+  skippedRowCount: number;
+  currentExistingCount: number;
+  csvTargetDates: string[];
+}): string[] {
+  if (validRowCount === 0) return [];
+  const targetLabel = kind === "routes" ? "便" : "タスク";
+  const notes: string[] = [];
+  if (csvTargetDates.length === 0) {
+    notes.push(`CSVに対象日列がないため、画面右上の対象日 ${businessDate} に登録します。`);
+  } else if (csvTargetDates.length === 1) {
+    notes.push(`CSV内の対象日は ${csvTargetDates[0]} です。`);
+  }
+  if (validRowCount >= 50) {
+    notes.push(`${targetLabel}を${validRowCount}件登録します。大量登録のため、判定CSVを控えとして残すことをおすすめします。`);
+  }
+  if (currentExistingCount > 0) {
+    notes.push(`対象日には既に${targetLabel}が${currentExistingCount}件あります。取込後は合計${currentExistingCount + validRowCount}件の目安です。`);
+  }
+  if (skippedRowCount > 0) {
+    notes.push(`既存判定の${skippedRowCount}件は上書きせずスキップします。`);
+  }
+  return notes;
+}
+
 function findSkippedRows(
   kind: ImportKind,
   rows: ParsedCsvRow[],
@@ -620,7 +697,7 @@ function findSkippedRows(
 function validateRows(
   kind: ImportKind,
   rows: ParsedCsvRow[],
-  context: { routes: Route[]; tasks: Task[]; stations: Station[]; lanes: Lane[]; workers: Worker[] },
+  context: { routes: Route[]; tasks: Task[]; stations: Station[]; lanes: Lane[]; workers: Worker[]; businessDate: string },
 ): ValidationResult[] {
   const required = requiredColumns[kind];
   const routeFlightCounts = countValues(rows.map((row) => normalize(row["便番号"])));
@@ -636,6 +713,7 @@ function validateRows(
       const start = normalize(row["予定開始"]);
       const end = normalize(row["予定終了"]);
       const status = normalize(row["状態"]);
+      const rowBusinessDate = normalize(row[optionalBusinessDateColumn]);
 
       if (start && !isTimeLabel(start)) errors.push("予定開始はHH:mmで入力してください");
       if (end && !isTimeLabel(end)) errors.push("予定終了はHH:mmで入力してください");
@@ -643,6 +721,9 @@ function validateRows(
         errors.push("予定終了は予定開始より後にしてください");
       }
       if (status && !validStatus(kind, status)) errors.push("状態の値が正しくありません");
+      if (rowBusinessDate && rowBusinessDate !== context.businessDate) {
+        errors.push(`対象日が画面の対象日（${context.businessDate}）と一致しません`);
+      }
 
       if (kind === "routes") {
         validateRouteRow(row, context.routes, context.stations, routeFlightCounts, rows, index, errors);
