@@ -41,6 +41,8 @@ Phase 2では、Phase 1の運用基盤を保ったまま、ダッシュボード
 - Phase 2 CSV取込
 - Phase 2実績分析
 - Phase 2ダイヤテンプレート
+- Phase 2入力改善
+- Firestore Rules自動テスト
 
 ## Phase 1機能整理
 
@@ -67,11 +69,11 @@ Phase 2では、日々の運用状況を見やすくし、入力・出力・分�
 | --- | --- | --- |
 | ダッシュボード | 当日の便・タスク進捗、前工程待ち、作業員別/ステーション別進捗 | 実装済み |
 | CSV/Excel出力 | 当日計画・実績・操作履歴のCSV出力 | 実装済み |
-| Excel取込 | 便・タスク計画のCSV取込 | 新規登録まで実装済み |
+| Excel取込 | 便・タスク計画のCSV取込 | 新規登録・判定改善まで実装済み |
 | ダイヤテンプレート | 定型便・定型タスクの生成 | 実装済み |
 | 実績分析 | 作業時間、遅れ、完了率の集計 | 実装済み |
-| 入力改善 | フォームの使いやすさ、入力バリデーション強化 | 未着手 |
-| テスト | Firestore Rulesの自動テスト | 未着手 |
+| 入力改善 | フォームの使いやすさ、入力バリデーション強化 | 主要フォーム実装済み |
+| テスト | Firestore Rulesの自動テスト | 代表シナリオ実装済み |
 
 ## ローカル起動
 
@@ -154,6 +156,14 @@ npm.cmd run build
 ```
 
 `build`が成功すると、公開用ファイルが`dist`に生成されます。
+
+Firestore Security Rulesの自動テスト:
+
+```powershell
+npm.cmd run test:rules
+```
+
+`test:rules`はFirestore Emulatorを使うため、Javaが必要です。Javaが入っていない環境では、`Could not spawn java -version` で停止します。
 
 Codex環境では`npm.cmd run build`が`spawn EPERM`で止まる場合があります。ユーザー側PowerShellで成功している場合は、その結果を優先してください。
 
@@ -282,10 +292,27 @@ firebase.cmd deploy --only hosting
 4. 対象日を変更すると、その日の便・タスク・履歴へ切り替わる
 5. 検索・絞り込みで目的の便、タスク、操作履歴を探せる
 
-## Phase 2候補
+## Phase 2仕上げ確認
 
-- CSV取込の使いやすさ改善
-- Excel出力
-- 入力フォームのモーダル改善
-- 入力バリデーション強化
-- Firestore Rulesの自動テスト
+Phase 2の受入確認は、次のドキュメントを基準に行います。
+
+- [Phase 2受入確認](docs/PHASE2_ACCEPTANCE.md)
+- [Phase 2受入確認結果](docs/PHASE2_ACCEPTANCE_RESULT.md)
+
+ローカルで確認する場合:
+
+```powershell
+npm.cmd run lint
+npm.cmd run build
+npm.cmd run test:rules
+```
+
+`test:rules`はFirestore Emulatorを使うためJavaが必要です。
+
+## 次フェーズ候補
+
+- 既存データを上書きするCSV取込モード
+- 本格的なExcel `.xlsx` 出力
+- ダッシュボード/分析の期間比較
+- 大規模データ向けのページング
+- CI環境でのRules自動テスト実行

@@ -87,3 +87,25 @@ export function Field({ label, children }: PropsWithChildren<{ label: string }>)
 export function EmptyState({ message }: { message: string }) {
   return <div className="empty-state">{message}</div>;
 }
+
+export function FormCheckPanel({ issues, warnings }: { issues: string[]; warnings: string[] }) {
+  const ok = issues.length === 0 && warnings.length === 0;
+  const tone = issues.length > 0 ? "error" : warnings.length > 0 ? "warning" : "ok";
+
+  return (
+    <div className={`form-check-panel ${tone}`}>
+      <strong>保存前チェック</strong>
+      {ok ? <p>入力内容に問題は見つかりません。</p> : null}
+      {issues.length > 0 ? (
+        <ul>
+          {issues.map((issue) => <li key={issue}>{issue}</li>)}
+        </ul>
+      ) : null}
+      {warnings.length > 0 ? (
+        <ul>
+          {warnings.map((warning) => <li key={warning}>{warning}</li>)}
+        </ul>
+      ) : null}
+    </div>
+  );
+}

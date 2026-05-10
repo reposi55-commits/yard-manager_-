@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { Card, DangerButton, EmptyState, Field, FormCheckPanel, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
 import { formatTimestamp, labelToOffsetMin } from "../utils/date";
@@ -47,6 +47,17 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       return matchesKeyword && matchesType && matchesStatus;
     });
   }, [routes, searchText, typeFilter, statusFilter]);
+  const formIssues = useMemo(() => buildRouteFormIssues(draft), [draft]);
+  const formWarnings = useMemo(() => {
+    if (formIssues.length > 0) return [];
+    return buildRouteWarnings(routes, editing?.id, {
+      routeName: draft.routeName.trim(),
+      flightNumber: draft.flightNumber.trim(),
+      stationId: draft.stationId,
+      plannedStartOffsetMin: labelToOffsetMin(draft.plannedStartLabel),
+      plannedEndOffsetMin: labelToOffsetMin(draft.plannedEndLabel),
+    });
+  }, [draft, editing?.id, formIssues.length, routes]);
 
   function openCreateForm() {
     setDraft(routeDefaults);
@@ -86,26 +97,14 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   async function save() {
     const routeName = draft.routeName.trim();
     const flightNumber = draft.flightNumber.trim();
-    if (!routeName || !flightNumber || !draft.stationId || !draft.plannedStartLabel || !draft.plannedEndLabel) {
-      setError("便名、便番号、ステーション、予定時刻は必須です。");
+    if (formIssues.length > 0) {
+      setError(formIssues[0]);
       return;
     }
 
     const plannedStartOffsetMin = labelToOffsetMin(draft.plannedStartLabel);
     const plannedEndOffsetMin = labelToOffsetMin(draft.plannedEndLabel);
-    if (plannedEndOffsetMin <= plannedStartOffsetMin) {
-      setError("予定終了は予定開始より後の時刻にしてください。");
-      return;
-    }
-
-    const warnings = buildRouteWarnings(routes, editing?.id, {
-      routeName,
-      flightNumber,
-      stationId: draft.stationId,
-      plannedStartOffsetMin,
-      plannedEndOffsetMin,
-    });
-    if (warnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${warnings.join("\n")}\n\nこのまま保存しますか？`)) {
+    if (formWarnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${formWarnings.join("\n")}\n\nこのまま保存しますか？`)) {
       return;
     }
 
@@ -217,12 +216,13 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
           onClose={closeForm}
           footer={
             <>
-              <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+              <PrimaryButton type="button" onClick={save} disabled={formIssues.length > 0} title={formIssues[0] || ""}>{editing ? "更新" : "追加"}</PrimaryButton>
               <SecondaryButton type="button" onClick={closeForm}>キャンセル</SecondaryButton>
             </>
           }
         >
           {error ? <p className="alert">{error}</p> : null}
+          <FormCheckPanel issues={formIssues} warnings={formWarnings} />
           <div className="form-grid">
             <Field label="種別">
               <select value={draft.type} onChange={(event) => setDraft({ ...draft, type: event.target.value as RouteType })}>
@@ -262,6 +262,19 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
       ) : null}
     </Card>
   );
+}
+
+function buildRouteFormIssues(draft: typeof routeDefaults): string[] {
+  const issues: string[] = [];
+  if (!draft.routeName.trim()) issues.push("便名を入力してください。");
+  if (!draft.flightNumber.trim()) issues.push("便番号を入力してください。");
+  if (!draft.stationId) issues.push("ステーションを選択してください。");
+  if (!draft.plannedStartLabel) issues.push("予定開始を入力してください。");
+  if (!draft.plannedEndLabel) issues.push("予定終了を入力してください。");
+  if (draft.plannedStartLabel && draft.plannedEndLabel && labelToOffsetMin(draft.plannedEndLabel) <= labelToOffsetMin(draft.plannedStartLabel)) {
+    issues.push("予定終了は予定開始より後の時刻にしてください。");
+  }
+  return issues;
 }
 
 function buildRouteWarnings(

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, DangerButton, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { Card, DangerButton, EmptyState, Field, FormCheckPanel, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
 import type { AppUser, Lane, Route, Task, TaskStatus, Worker } from "../types";
 import { formatTimestamp, labelToOffsetMin } from "../utils/date";
@@ -53,6 +53,18 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       return matchesKeyword && matchesWorker && matchesStatus;
     });
   }, [tasks, searchText, workerFilter, statusFilter]);
+  const formIssues = useMemo(() => buildTaskFormIssues(draft), [draft]);
+  const formWarnings = useMemo(() => {
+    if (formIssues.length > 0) return [];
+    return buildTaskWarnings(tasks, editing?.id, {
+      taskName: draft.taskName.trim(),
+      workerId: draft.workerId,
+      laneId: draft.laneId,
+      targetMainRouteId: draft.targetMainRouteId,
+      plannedStartOffsetMin: labelToOffsetMin(draft.plannedStartLabel),
+      plannedEndOffsetMin: labelToOffsetMin(draft.plannedEndLabel),
+    });
+  }, [draft, editing?.id, formIssues.length, tasks]);
 
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
@@ -113,27 +125,14 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
 
   async function save() {
     const taskName = draft.taskName.trim();
-    if (!taskName || !draft.workerId || !draft.laneId || !draft.targetMainRouteId || !draft.plannedStartLabel || !draft.plannedEndLabel) {
-      setError("タスク名、作業員、レーン、対象メイン便、予定時刻は必須です。");
+    if (formIssues.length > 0) {
+      setError(formIssues[0]);
       return;
     }
 
     const plannedStartOffsetMin = labelToOffsetMin(draft.plannedStartLabel);
     const plannedEndOffsetMin = labelToOffsetMin(draft.plannedEndLabel);
-    if (plannedEndOffsetMin <= plannedStartOffsetMin) {
-      setError("予定終了は予定開始より後の時刻にしてください。");
-      return;
-    }
-
-    const warnings = buildTaskWarnings(tasks, editing?.id, {
-      taskName,
-      workerId: draft.workerId,
-      laneId: draft.laneId,
-      targetMainRouteId: draft.targetMainRouteId,
-      plannedStartOffsetMin,
-      plannedEndOffsetMin,
-    });
-    if (warnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${warnings.join("\n")}\n\nこのまま保存しますか？`)) {
+    if (formWarnings.length > 0 && !window.confirm(`確認が必要な内容があります。\n\n${formWarnings.join("\n")}\n\nこのまま保存しますか？`)) {
       return;
     }
 
@@ -244,12 +243,13 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
           onClose={closeForm}
           footer={
             <>
-              <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+              <PrimaryButton type="button" onClick={save} disabled={formIssues.length > 0} title={formIssues[0] || ""}>{editing ? "更新" : "追加"}</PrimaryButton>
               <SecondaryButton type="button" onClick={closeForm}>キャンセル</SecondaryButton>
             </>
           }
         >
           {error ? <p className="alert">{error}</p> : null}
+          <FormCheckPanel issues={formIssues} warnings={formWarnings} />
           <div className="form-grid">
             <Field label="タスク名">
               <input value={draft.taskName} onChange={(event) => setDraft({ ...draft, taskName: event.target.value })} />
@@ -299,6 +299,20 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
       ) : null}
     </Card>
   );
+}
+
+function buildTaskFormIssues(draft: typeof taskDefaults): string[] {
+  const issues: string[] = [];
+  if (!draft.taskName.trim()) issues.push("タスク名を入力してください。");
+  if (!draft.workerId) issues.push("作業員を選択してください。");
+  if (!draft.laneId) issues.push("レーンを選択してください。");
+  if (!draft.targetMainRouteId) issues.push("対象メイン便を選択してください。");
+  if (!draft.plannedStartLabel) issues.push("予定開始を入力してください。");
+  if (!draft.plannedEndLabel) issues.push("予定終了を入力してください。");
+  if (draft.plannedStartLabel && draft.plannedEndLabel && labelToOffsetMin(draft.plannedEndLabel) <= labelToOffsetMin(draft.plannedStartLabel)) {
+    issues.push("予定終了は予定開始より後の時刻にしてください。");
+  }
+  return issues;
 }
 
 function buildTaskWarnings(

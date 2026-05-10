@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, EmptyState, Field, Modal, PrimaryButton, SecondaryButton } from "../components/ui";
+import { Card, EmptyState, Field, FormCheckPanel, Modal, PrimaryButton, SecondaryButton } from "../components/ui";
 import { createAppUserProfile, subscribeMasters, subscribeUsers, updateAppUserProfile } from "../services/firestoreService";
 import type { AppUser, UserRole, Worker } from "../types";
 
@@ -54,6 +54,8 @@ export function UserManagement({ user }: { user: AppUser }) {
       }),
     [users, workers, searchText, roleFilter],
   );
+  const formIssues = useMemo(() => buildUserIssues(draft, editing, user), [draft, editing, user]);
+  const formWarnings = useMemo(() => buildUserWarnings(draft, editing, users), [draft, editing, users]);
 
   function startCreate() {
     setEditing(null);
@@ -90,20 +92,8 @@ export function UserManagement({ user }: { user: AppUser }) {
     };
     const uid = draft.uid.trim();
 
-    if (!editing && !uid) {
-      window.alert("AuthenticationのUIDを入力してください。");
-      return;
-    }
-    if (!payload.email || !payload.displayName) {
-      window.alert("メールアドレスと表示名は必須です。");
-      return;
-    }
-    if (payload.role === "user" && !payload.workerId) {
-      window.alert("一般ユーザーには作業員を紐付けてください。");
-      return;
-    }
-    if (editing?.id === user.id && (payload.role !== "admin" || !payload.active)) {
-      window.alert("ログイン中の管理者を無効化したり、一般ユーザーへ変更したりすることはできません。");
+    if (formIssues.length > 0) {
+      window.alert(formIssues[0]);
       return;
     }
 
@@ -184,6 +174,7 @@ export function UserManagement({ user }: { user: AppUser }) {
       </div>
       {open ? (
         <Modal title={editing ? "ユーザー設定を編集" : "ユーザー設定を追加"} onClose={closeModal}>
+          <FormCheckPanel issues={formIssues} warnings={formWarnings} />
           <div className="form-grid">
             <Field label="Authentication UID">
               <input value={draft.uid} disabled={Boolean(editing)} onChange={(event) => setDraft({ ...draft, uid: event.target.value })} />
@@ -217,7 +208,7 @@ export function UserManagement({ user }: { user: AppUser }) {
               有効
             </label>
             <div className="form-actions">
-              <PrimaryButton type="button" onClick={save}>{editing ? "更新" : "追加"}</PrimaryButton>
+              <PrimaryButton type="button" onClick={save} disabled={formIssues.length > 0} title={formIssues[0] || ""}>{editing ? "更新" : "追加"}</PrimaryButton>
               <SecondaryButton type="button" onClick={closeModal}>キャンセル</SecondaryButton>
             </div>
           </div>
@@ -225,4 +216,35 @@ export function UserManagement({ user }: { user: AppUser }) {
       ) : null}
     </Card>
   );
+}
+
+function buildUserIssues(draft: UserDraft, editing: AppUser | null, currentUser: AppUser): string[] {
+  const issues: string[] = [];
+  if (!editing && !draft.uid.trim()) issues.push("Authentication UIDを入力してください。");
+  if (!draft.email.trim()) issues.push("メールアドレスを入力してください。");
+  if (draft.email.trim() && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(draft.email.trim())) {
+    issues.push("メールアドレスの形式を確認してください。");
+  }
+  if (!draft.displayName.trim()) issues.push("表示名を入力してください。");
+  if (draft.role === "user" && !draft.workerId) issues.push("一般ユーザーには作業員を紐付けてください。");
+  if (editing?.id === currentUser.id && (draft.role !== "admin" || !draft.active)) {
+    issues.push("ログイン中の管理者を無効化したり、一般ユーザーへ変更したりすることはできません。");
+  }
+  return issues;
+}
+
+function buildUserWarnings(draft: UserDraft, editing: AppUser | null, users: AppUser[]): string[] {
+  const uid = draft.uid.trim();
+  const email = draft.email.trim();
+  return users
+    .filter((item) => item.id !== editing?.id)
+    .flatMap((item) => {
+      const warnings: string[] = [];
+      if (!editing && uid && item.id === uid) warnings.push(`同じUIDのユーザー設定が既にあります: ${uid}`);
+      if (email && item.email === email) warnings.push(`同じメールアドレスのユーザー設定が既にあります: ${email}`);
+      if (draft.role === "user" && draft.workerId && item.workerId === draft.workerId) {
+        warnings.push(`同じ作業員に紐付いたユーザーが既にあります: ${item.displayName}`);
+      }
+      return warnings;
+    });
 }
