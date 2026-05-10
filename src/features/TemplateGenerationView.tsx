@@ -14,12 +14,20 @@ import type {
   Worker,
 } from "../types";
 import { MASTER_BUSINESS_DATE } from "../lib/firebase";
+import { downloadCsv, parseCsv, type ParsedCsvRow } from "../utils/csv";
 import { labelToOffsetMin, toDateInputValue } from "../utils/date";
 import { useMasterOptions } from "./MasterManagement";
 
 type TemplateMode = "create" | "manage";
 type BatchMode = "create" | "recreate" | "delete";
 type TemplateDraft = Pick<DialTemplate, "name" | "description" | "active" | "routes" | "tasks">;
+type TemplateImportItem = {
+  name: string;
+  draft: TemplateDraft;
+  sourceRows: number[];
+  status: "ready" | "skip" | "error";
+  issues: string[];
+};
 type TemplatePlan = {
   days: string[];
   existingRoutes: Route[];
@@ -30,6 +38,64 @@ type TemplatePlan = {
 };
 
 const MAX_BATCH_DAYS = 31;
+
+const templateImportColumns = [
+  "テンプレート名",
+  "説明",
+  "有効",
+  "行種別",
+  "キー",
+  "便種別",
+  "便名",
+  "便番号",
+  "ステーション名",
+  "タスク",
+  "対象便キー",
+  "作業員名",
+  "レーン名",
+  "予定開始",
+  "予定終了",
+  "指示",
+];
+
+const templateImportSample = [
+  {
+    テンプレート名: "夕方基本ダイヤ",
+    説明: "夕方帯の基本テンプレート",
+    有効: "true",
+    行種別: "便",
+    キー: "e1",
+    便種別: "main",
+    便名: "夕方A便",
+    便番号: "EV-001",
+    ステーション名: "北ヤード 1番",
+    タスク: "",
+    対象便キー: "",
+    作業員名: "",
+    レーン名: "",
+    予定開始: "17:00",
+    予定終了: "17:45",
+    指示: "",
+  },
+  {
+    テンプレート名: "夕方基本ダイヤ",
+    説明: "夕方帯の基本テンプレート",
+    有効: "true",
+    行種別: "タスク",
+    キー: "",
+    便種別: "",
+    便名: "",
+    便番号: "",
+    ステーション名: "",
+    タスク: "荷下ろし",
+    対象便キー: "e1",
+    作業員名: "作業員A",
+    レーン名: "A-01",
+    予定開始: "17:05",
+    予定終了: "17:35",
+    指示: "到着確認後に開始",
+  },
+];
 
 const emptyRoute: DialTemplateRoute = {
   key: "r1",
@@ -98,6 +164,10 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [plan, setPlan] = useState<TemplatePlan | null>(null);
+  const [templateCsvRows, setTemplateCsvRows] = useState<ParsedCsvRow[]>([]);
+  const [templateCsvText, setTemplateCsvText] = useState("");
+  const [templateCsvFileName, setTemplateCsvFileName] = useState("");
+  const [templateImportConfirmOpen, setTemplateImportConfirmOpen] = useState(false);
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
   const [saving, setSaving] = useState(false);
@@ -136,8 +206,16 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
   const batchCountText = selected
     ? `対象日 ${days.length}日 / 便 ${days.length * selected.routes.length}件 / タスク ${days.length * selected.tasks.length}件`
     : "テンプレート未選択";
+  const templateImportItems = useMemo(
+    () => buildTemplateImportItems(templateCsvRows, templates, activeStations, activeLanes, activeWorkers),
+    [templateCsvRows, templates, activeStations, activeLanes, activeWorkers],
+  );
+  const templateImportReadyCount = templateImportItems.filter((item) => item.status === "ready").length;
+  const templateImportIssueCount = templateImportItems.filter((item) => item.status === "error").length;
+  const templateImportSkipCount = templateImportItems.filter((item) => item.status === "skip").length;
   const canPrepare = Boolean(selected) && !batchRangeIssue && !saving;
   const canSaveDraft = draftIssues.length === 0 && !saving;
+  const canImportTemplates = templateImportReadyCount > 0 && templateImportIssueCount === 0 && !saving;
 
   async function seedPresets() {
     setError("");
@@ -179,6 +257,67 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
       setDraft(createEmptyDraft());
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "テンプレート保存に失敗しました。");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleTemplateCsvFile(file?: File) {
+    setError("");
+    setSuccess("");
+    setTemplateImportConfirmOpen(false);
+    if (!file) return;
+    try {
+      const text = await file.text();
+      setTemplateCsvRows(parseCsv(text));
+      setTemplateCsvFileName(file.name);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "テンプレートCSVの読み込みに失敗しました。");
+    }
+  }
+
+  function handleTemplateCsvText() {
+    setError("");
+    setSuccess("");
+    setTemplateImportConfirmOpen(false);
+    if (!templateCsvText.trim()) {
+      setError("貼り付けるテンプレートCSV本文を入力してください。");
+      return;
+    }
+    setTemplateCsvRows(parseCsv(templateCsvText));
+    setTemplateCsvFileName("貼り付けCSV");
+  }
+
+  function requestTemplateImportConfirm() {
+    setError("");
+    setSuccess("");
+    if (!canImportTemplates) {
+      setError("テンプレートCSVに修正が必要です。プレビューの判定を確認してください。");
+      return;
+    }
+    setTemplateImportConfirmOpen(true);
+  }
+
+  async function importTemplatesFromCsv() {
+    setError("");
+    setSuccess("");
+    if (!canImportTemplates) {
+      setError("テンプレートCSVに修正が必要です。");
+      return;
+    }
+    setSaving(true);
+    try {
+      const readyItems = templateImportItems.filter((item) => item.status === "ready");
+      for (const item of readyItems) {
+        await createEntity("dialTemplates", { ...item.draft, siteId: user.siteId, businessDate: MASTER_BUSINESS_DATE }, user);
+      }
+      setSuccess(`テンプレートCSVから${readyItems.length}件登録しました。`);
+      setTemplateImportConfirmOpen(false);
+      setTemplateCsvRows([]);
+      setTemplateCsvText("");
+      setTemplateCsvFileName("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "テンプレートCSV取込に失敗しました。");
     } finally {
       setSaving(false);
     }
@@ -378,8 +517,44 @@ export function TemplateGenerationView({ user, businessDate }: { user: AppUser; 
           onDuplicate={(template) => void duplicateTemplate(template)}
           onDeactivate={(template) => void deactivateTemplate(template)}
           onSeed={() => void seedPresets()}
+          csvRows={templateCsvRows}
+          csvText={templateCsvText}
+          csvFileName={templateCsvFileName}
+          importItems={templateImportItems}
+          importReadyCount={templateImportReadyCount}
+          importIssueCount={templateImportIssueCount}
+          importSkipCount={templateImportSkipCount}
+          canImportTemplates={canImportTemplates}
+          onCsvTextChange={setTemplateCsvText}
+          onCsvFile={(file) => void handleTemplateCsvFile(file)}
+          onCsvTextLoad={handleTemplateCsvText}
+          onDownloadCsvTemplate={() => downloadCsv("yardmanager-dial-template-import-template.csv", templateImportSample)}
+          onRequestCsvImport={requestTemplateImportConfirm}
         />
       )}
+
+      {templateImportConfirmOpen ? (
+        <Modal
+          title="テンプレートCSV取込の最終確認"
+          onClose={() => setTemplateImportConfirmOpen(false)}
+          footer={
+            <>
+              <SecondaryButton type="button" onClick={() => setTemplateImportConfirmOpen(false)}>戻る</SecondaryButton>
+              <PrimaryButton type="button" disabled={!canImportTemplates || saving} onClick={() => void importTemplatesFromCsv()}>
+                {saving ? "取込中..." : "この内容で登録"}
+              </PrimaryButton>
+            </>
+          }
+        >
+          <div className="detail-list">
+            <div><span>CSV</span><strong>{templateCsvFileName || "未選択"}</strong></div>
+            <div><span>登録予定</span><strong>{templateImportReadyCount}件</strong></div>
+            <div><span>既存スキップ</span><strong>{templateImportSkipCount}件</strong></div>
+            <div><span>要修正</span><strong>{templateImportIssueCount}件</strong></div>
+          </div>
+          <p className="helper-text">登録は新規テンプレートのみです。同名テンプレートは上書きせずスキップします。</p>
+        </Modal>
+      ) : null}
 
       {confirmOpen && plan && selected ? (
         <Modal
@@ -435,6 +610,19 @@ function TemplateManagement({
   onDuplicate,
   onDeactivate,
   onSeed,
+  csvRows,
+  csvText,
+  csvFileName,
+  importItems,
+  importReadyCount,
+  importIssueCount,
+  importSkipCount,
+  canImportTemplates,
+  onCsvTextChange,
+  onCsvFile,
+  onCsvTextLoad,
+  onDownloadCsvTemplate,
+  onRequestCsvImport,
 }: {
   templates: DialTemplate[];
   draft: TemplateDraft;
@@ -451,6 +639,19 @@ function TemplateManagement({
   onDuplicate: (template: DialTemplate) => void;
   onDeactivate: (template: DialTemplate) => void;
   onSeed: () => void;
+  csvRows: ParsedCsvRow[];
+  csvText: string;
+  csvFileName: string;
+  importItems: TemplateImportItem[];
+  importReadyCount: number;
+  importIssueCount: number;
+  importSkipCount: number;
+  canImportTemplates: boolean;
+  onCsvTextChange: (value: string) => void;
+  onCsvFile: (file?: File) => void;
+  onCsvTextLoad: () => void;
+  onDownloadCsvTemplate: () => void;
+  onRequestCsvImport: () => void;
 }) {
   return (
     <div className="template-management">
@@ -485,6 +686,23 @@ function TemplateManagement({
           </PrimaryButton>
         </div>
       </section>
+
+      <TemplateCsvImportPanel
+        rows={csvRows}
+        csvText={csvText}
+        fileName={csvFileName}
+        importItems={importItems}
+        readyCount={importReadyCount}
+        issueCount={importIssueCount}
+        skipCount={importSkipCount}
+        canImport={canImportTemplates}
+        saving={saving}
+        onCsvTextChange={onCsvTextChange}
+        onCsvFile={onCsvFile}
+        onCsvTextLoad={onCsvTextLoad}
+        onDownloadTemplate={onDownloadCsvTemplate}
+        onRequestImport={onRequestCsvImport}
+      />
 
       <section className="template-panel">
         <div className="template-result-header">
@@ -524,6 +742,100 @@ function TemplateManagement({
         ) : null}
       </section>
     </div>
+  );
+}
+
+function TemplateCsvImportPanel({
+  rows,
+  csvText,
+  fileName,
+  importItems,
+  readyCount,
+  issueCount,
+  skipCount,
+  canImport,
+  saving,
+  onCsvTextChange,
+  onCsvFile,
+  onCsvTextLoad,
+  onDownloadTemplate,
+  onRequestImport,
+}: {
+  rows: ParsedCsvRow[];
+  csvText: string;
+  fileName: string;
+  importItems: TemplateImportItem[];
+  readyCount: number;
+  issueCount: number;
+  skipCount: number;
+  canImport: boolean;
+  saving: boolean;
+  onCsvTextChange: (value: string) => void;
+  onCsvFile: (file?: File) => void;
+  onCsvTextLoad: () => void;
+  onDownloadTemplate: () => void;
+  onRequestImport: () => void;
+}) {
+  return (
+    <section className="template-panel">
+      <div className="template-result-header">
+        <h3>テンプレートCSV取込</h3>
+        <SecondaryButton type="button" onClick={onDownloadTemplate}>CSVテンプレート出力</SecondaryButton>
+      </div>
+      <p className="helper-text">
+        1つのテンプレートを複数行で表します。行種別を「便」または「タスク」にし、同じテンプレート名の行をまとめて登録します。
+      </p>
+      <div className="import-toolbar">
+        <Field label="CSVファイル">
+          <input type="file" accept=".csv,text/csv" onChange={(event) => onCsvFile(event.target.files?.[0])} />
+        </Field>
+        <PrimaryButton type="button" disabled={!canImport || saving} onClick={onRequestImport}>登録前確認</PrimaryButton>
+      </div>
+      <div className="import-paste-panel">
+        <Field label="CSV本文を貼り付け">
+          <textarea
+            value={csvText}
+            onChange={(event) => onCsvTextChange(event.target.value)}
+            placeholder="CSVテンプレートと同じ列名の本文を貼り付けます"
+          />
+        </Field>
+        <SecondaryButton type="button" onClick={onCsvTextLoad}>貼り付けCSVを読み込む</SecondaryButton>
+      </div>
+      {fileName ? <p className="helper-text">読込元: {fileName} / CSV行 {rows.length}行</p> : null}
+      {importItems.length > 0 ? (
+        <>
+          <div className="import-summary">
+            <div><span>登録予定</span><strong>{readyCount}件</strong></div>
+            <div><span>既存スキップ</span><strong>{skipCount}件</strong></div>
+            <div><span>要修正</span><strong>{issueCount}件</strong></div>
+          </div>
+          <div className="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>判定</th>
+                  <th>テンプレート</th>
+                  <th>件数</th>
+                  <th>理由</th>
+                </tr>
+              </thead>
+              <tbody>
+                {importItems.map((item) => (
+                  <tr key={item.name}>
+                    <td>{importStatusLabel(item.status)}</td>
+                    <td>{item.name}</td>
+                    <td>便 {item.draft.routes.length} / タスク {item.draft.tasks.length}</td>
+                    <td>{item.issues.length > 0 ? item.issues.join(" / ") : "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </>
+      ) : (
+        <EmptyState message="CSVを読み込むと、テンプレート単位の判定が表示されます。" />
+      )}
+    </section>
   );
 }
 
@@ -686,6 +998,117 @@ function fillPresetMasters(template: TemplateDraft, stations: { name: string }[]
       laneName: task.laneName || lanes[index % Math.max(lanes.length, 1)]?.name || "",
     })),
   };
+}
+
+function buildTemplateImportItems(
+  rows: ParsedCsvRow[],
+  existingTemplates: DialTemplate[],
+  stations: { name: string }[],
+  lanes: Lane[],
+  workers: Worker[],
+): TemplateImportItem[] {
+  if (rows.length === 0) return [];
+  const missingColumns = templateImportColumns.filter((column) => !(column in rows[0]));
+  const grouped = new Map<string, { draft: TemplateDraft; sourceRows: number[]; rowIssues: string[] }>();
+
+  rows.forEach((row, index) => {
+    const rowNumber = index + 2;
+    const name = normalize(row["テンプレート名"]);
+    const kind = normalize(row["行種別"]);
+    if (!name) return;
+    const current = grouped.get(name) || {
+      draft: { name, description: normalize(row["説明"]), active: parseCsvActive(row["有効"]), routes: [], tasks: [] },
+      sourceRows: [],
+      rowIssues: [],
+    };
+    current.sourceRows.push(rowNumber);
+    if (!current.draft.description && normalize(row["説明"])) current.draft.description = normalize(row["説明"]);
+    if (normalize(row["有効"])) current.draft.active = parseCsvActive(row["有効"]);
+
+    if (isRouteCsvKind(kind)) {
+      current.draft.routes.push({
+        key: normalize(row["キー"]),
+        type: parseRouteType(row["便種別"]),
+        routeName: normalize(row["便名"]),
+        flightNumber: normalize(row["便番号"]),
+        stationName: normalize(row["ステーション名"]),
+        start: normalize(row["予定開始"]),
+        end: normalize(row["予定終了"]),
+      });
+    } else if (isTaskCsvKind(kind)) {
+      current.draft.tasks.push({
+        taskName: normalize(row["タスク"]),
+        routeKey: normalize(row["対象便キー"]),
+        workerName: normalize(row["作業員名"]),
+        laneName: normalize(row["レーン名"]),
+        start: normalize(row["予定開始"]),
+        end: normalize(row["予定終了"]),
+        instruction: normalize(row["指示"]),
+      });
+    } else {
+      current.rowIssues.push(`${rowNumber}行目: 行種別は「便」または「タスク」にしてください。`);
+    }
+    grouped.set(name, current);
+  });
+
+  const items = [...grouped.entries()].map(([name, group]) => {
+    const existing = existingTemplates.some((template) => !template.deleted && template.name === name);
+    const issues = [
+      ...missingColumns.map((column) => `CSVに列「${column}」がありません。`),
+      ...group.rowIssues,
+      ...validateDraft(group.draft, stations, lanes, workers),
+    ];
+    if (existing) {
+      return { name, draft: group.draft, sourceRows: group.sourceRows, status: "skip" as const, issues: ["同名テンプレートが既にあります。"] };
+    }
+    return {
+      name,
+      draft: group.draft,
+      sourceRows: group.sourceRows,
+      status: issues.length > 0 ? "error" as const : "ready" as const,
+      issues,
+    };
+  });
+
+  if (items.length === 0 && rows.length > 0) {
+    return [{
+      name: "CSV全体",
+      draft: createEmptyDraft(),
+      sourceRows: rows.map((_, index) => index + 2),
+      status: "error",
+      issues: ["テンプレート名が入力された行がありません。"],
+    }];
+  }
+
+  return items;
+}
+
+function normalize(value: string | undefined): string {
+  return String(value || "").trim();
+}
+
+function parseCsvActive(value: string | undefined): boolean {
+  const text = normalize(value).toLowerCase();
+  return !["false", "0", "no", "無効"].includes(text);
+}
+
+function isRouteCsvKind(value: string): boolean {
+  return ["便", "route", "routes"].includes(value.toLowerCase());
+}
+
+function isTaskCsvKind(value: string): boolean {
+  return ["タスク", "task", "tasks"].includes(value.toLowerCase());
+}
+
+function parseRouteType(value: string | undefined): RouteType {
+  const text = normalize(value).toLowerCase();
+  return text === "sub" || text === "サブ" ? "sub" : "main";
+}
+
+function importStatusLabel(status: TemplateImportItem["status"]): string {
+  if (status === "ready") return "登録予定";
+  if (status === "skip") return "スキップ";
+  return "要修正";
 }
 
 function validateDraft(draft: TemplateDraft, stations: { name: string }[], lanes: Lane[], workers: Worker[]): string[] {
