@@ -92,14 +92,58 @@ button {
   color: #607284;
 }
 
+.admin-menu {
+  display: grid;
+  gap: 10px;
+  padding: 12px 28px;
+  background: #ffffff;
+  border-bottom: 1px solid #d8e0e6;
+}
+
+.menu-groups {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.menu-groups button {
+  min-height: 64px;
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  text-align: left;
+  border: 1px solid #cdd8df;
+  background: #f8fafb;
+  border-radius: 8px;
+  padding: 10px 14px;
+  color: #25364a;
+}
+
+.menu-groups button strong {
+  font-size: 1.02rem;
+}
+
+.menu-groups button span {
+  color: #607284;
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.menu-groups button.active {
+  background: #e8f4f2;
+  border-color: #0f766e;
+  color: #0b4f49;
+}
+
+.menu-groups button.active span {
+  color: #276e67;
+}
+
 .main-nav {
   display: flex;
   flex-wrap: wrap;
   gap: 8px;
-  padding: 12px 28px;
   overflow-x: visible;
-  background: #ffffff;
-  border-bottom: 1px solid #d8e0e6;
 }
 
 .main-nav button {
@@ -1416,8 +1460,15 @@ th {
     width: 100%;
   }
 
-  .main-nav {
+  .admin-menu {
     padding: 10px 16px;
+  }
+
+  .menu-groups {
+    grid-template-columns: 1fr;
+  }
+
+  .main-nav {
     flex-wrap: nowrap;
     overflow-x: auto;
   }
