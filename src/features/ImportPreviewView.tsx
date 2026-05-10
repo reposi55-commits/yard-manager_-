@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, EmptyState, Field, PrimaryButton, SecondaryButton } from "../components/ui";
+import { Card, EmptyState, Field, Modal, PrimaryButton, SecondaryButton } from "../components/ui";
 import { createEntity, subscribeDaily } from "../services/firestoreService";
 import type { AppUser, Lane, Route, RouteStatus, RouteType, Station, Task, TaskStatus, Worker } from "../types";
 import { downloadCsv, parseCsv, type ParsedCsvRow } from "../utils/csv";
@@ -78,6 +78,8 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
   const [importResult, setImportResult] = useState<ImportResult | null>(null);
   const [safetyConfirmed, setSafetyConfirmed] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [csvText, setCsvText] = useState("");
+  const [confirmOpen, setConfirmOpen] = useState(false);
   const { stations, lanes, workers, error: masterError } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
@@ -166,6 +168,21 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     }
   }
 
+  function handleTextImport() {
+    setError("");
+    setSuccess("");
+    setImportResult(null);
+    setSafetyConfirmed(false);
+    if (!csvText.trim()) {
+      setRows([]);
+      setFileName("");
+      setError("貼り付けるCSV本文を入力してください。");
+      return;
+    }
+    setRows(parseCsv(csvText));
+    setFileName("貼り付けCSV");
+  }
+
   function downloadErrorRows() {
     const errorRows = validation.map((item) => ({
       行: item.rowNumber,
@@ -205,7 +222,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     downloadCsv(`yardmanager-import-judged-${kind}-${businessDate}.csv`, judgedRows);
   }
 
-  async function importRows() {
+  function requestImportConfirm() {
     setError("");
     setSuccess("");
     setImportResult(null);
@@ -213,9 +230,19 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
       setError(importBlockReason || "取込前に修正が必要な行があります。");
       return;
     }
+    setConfirmOpen(true);
+  }
+
+  async function importRows() {
+    setError("");
+    setSuccess("");
+    setImportResult(null);
+    if (!canImport) {
+      setError(importBlockReason || "取込前に修正が必要な行があります。");
+      setConfirmOpen(false);
+      return;
+    }
     const targetLabel = kind === "routes" ? "便" : "タスク";
-    const skipText = skippedRows.length > 0 ? `（既存${skippedRows.length}件をスキップ）` : "";
-    if (!window.confirm(`${targetLabel}を${validRowCount}件、新規登録します${skipText}。既存データは上書きしません。よろしいですか？`)) return;
 
     setSaving(true);
     try {
@@ -242,6 +269,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
       }
       setSuccess(`${targetLabel}を${validRowCount}件登録しました${skippedRows.length > 0 ? `。既存${skippedRows.length}件はスキップしました` : ""}。`);
       reset(false, false);
+      setConfirmOpen(false);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "CSV取込に失敗しました。");
     } finally {
@@ -254,6 +282,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     setFileName("");
     setError("");
     setSafetyConfirmed(false);
+    setConfirmOpen(false);
     if (clearSuccess) setSuccess("");
     if (clearResult) setImportResult(null);
   }
@@ -307,11 +336,23 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           <SecondaryButton type="button" onClick={() => reset()} disabled={!fileName && rows.length === 0}>
             クリア
           </SecondaryButton>
-          <PrimaryButton type="button" onClick={() => void importRows()} disabled={!canImport} title={importBlockReason}>
+          <PrimaryButton type="button" onClick={requestImportConfirm} disabled={!canImport} title={importBlockReason}>
             {saving ? "登録中..." : "新規登録"}
           </PrimaryButton>
         </div>
       </div>
+      <section className="import-paste-panel">
+        <Field label="CSV本文を貼り付け">
+          <textarea
+            value={csvText}
+            onChange={(event) => setCsvText(event.target.value)}
+            placeholder="テンプレートと同じ列名のCSV本文を貼り付けます"
+          />
+        </Field>
+        <SecondaryButton type="button" onClick={handleTextImport}>
+          貼り付け内容を読み込む
+        </SecondaryButton>
+      </section>
       {importBlockReason ? <p className="helper-text import-guidance">{importBlockReason}</p> : null}
 
       <div className="import-summary">
@@ -461,6 +502,31 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
             </>
           )}
         </section>
+      ) : null}
+      {confirmOpen ? (
+        <Modal
+          title="CSV取込の最終確認"
+          onClose={() => setConfirmOpen(false)}
+          footer={
+            <>
+              <SecondaryButton type="button" onClick={() => setConfirmOpen(false)}>
+                戻る
+              </SecondaryButton>
+              <PrimaryButton type="button" disabled={saving} onClick={() => void importRows()}>
+                {saving ? "登録中..." : "この内容で登録"}
+              </PrimaryButton>
+            </>
+          }
+        >
+          <div className="detail-list">
+            <div><span>対象日</span><strong>{businessDate}</strong></div>
+            <div><span>取込対象</span><strong>{kind === "routes" ? "便" : "タスク"}</strong></div>
+            <div><span>新規登録</span><strong>{validRowCount}件</strong></div>
+            <div><span>スキップ</span><strong>{skippedRows.length}件</strong></div>
+            <div><span>上書き</span><strong>しません</strong></div>
+          </div>
+          <p className="helper-text">対象日と件数が正しいことを確認してから登録します。</p>
+        </Modal>
       ) : null}
     </Card>
   );

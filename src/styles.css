@@ -632,6 +632,20 @@ th {
   margin-top: 0;
 }
 
+.import-paste-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: end;
+  margin: -2px 0 16px;
+}
+
+.import-paste-panel textarea {
+  min-height: 112px;
+  font-family: Consolas, "Courier New", monospace;
+  font-size: 0.95rem;
+}
+
 .import-guidance {
   margin-top: -8px;
   margin-bottom: 12px;
@@ -980,7 +994,9 @@ th {
 .modal {
   width: min(100%, 720px);
   max-height: 90vh;
-  overflow: auto;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  overflow: hidden;
   background: #ffffff;
   border-radius: 8px;
   box-shadow: 0 24px 80px rgba(6, 16, 28, 0.3);
@@ -1001,6 +1017,7 @@ th {
 
 .modal-body {
   padding: 20px;
+  overflow: auto;
 }
 
 .modal-footer {
@@ -1186,6 +1203,15 @@ th {
   gap: 16px;
 }
 
+.field-worker-selector {
+  display: grid;
+  gap: 8px;
+  padding: 14px;
+  border: 1px solid #d8e0e6;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
 .task-card-list {
   display: grid;
   gap: 20px;
@@ -1351,6 +1377,10 @@ th {
 
   .import-actions {
     justify-content: stretch;
+  }
+
+  .import-paste-panel {
+    grid-template-columns: 1fr;
   }
 
   .import-panel-header {

@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
-import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
-import { changeTaskStatus, subscribeDaily, subscribeWorkerTasks } from "../services/firestoreService";
-import type { AppUser, Route, RouteLink, Task, TaskStatus } from "../types";
+import { Card, EmptyState, Field, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
+import { changeTaskStatus, subscribeDaily, subscribeMasters, subscribeWorkerTasks } from "../services/firestoreService";
+import type { AppUser, Route, RouteLink, Task, TaskStatus, Worker } from "../types";
 import { formatTimestamp, isBeforePlannedStart } from "../utils/date";
 import { routeStatusLabels } from "../utils/status";
 
@@ -18,14 +18,31 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
   const [routes, setRoutes] = useState<Route[]>([]);
   const [links, setLinks] = useState<RouteLink[]>([]);
   const [selected, setSelected] = useState<TaskView | null>(null);
+  const [workers, setWorkers] = useState<Worker[]>([]);
+  const [selectedWorkerId, setSelectedWorkerId] = useState("");
   const [error, setError] = useState("");
+  const isAdminPreview = user.role === "admin";
+  const activeWorkers = useMemo(() => workers.filter((worker) => worker.active), [workers]);
+  const targetWorkerId = isAdminPreview ? selectedWorkerId : user.workerId;
 
   useEffect(() => {
-    if (!user.workerId) return undefined;
-    return subscribeWorkerTasks(user.siteId, businessDate, user.workerId, setTasks, setError);
-  }, [user.siteId, user.workerId, businessDate]);
+    if (!targetWorkerId) {
+      setTasks([]);
+      return undefined;
+    }
+    return subscribeWorkerTasks(user.siteId, businessDate, targetWorkerId, setTasks, setError);
+  }, [user.siteId, targetWorkerId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routeLinks", user.siteId, businessDate, setLinks, setError), [user.siteId, businessDate]);
+  useEffect(() => {
+    if (!isAdminPreview) return undefined;
+    return subscribeMasters("workers", user.siteId, setWorkers, setError);
+  }, [isAdminPreview, user.siteId]);
+  useEffect(() => {
+    if (!isAdminPreview) return;
+    if (selectedWorkerId && activeWorkers.some((worker) => worker.id === selectedWorkerId)) return;
+    setSelectedWorkerId(activeWorkers[0]?.id || "");
+  }, [activeWorkers, isAdminPreview, selectedWorkerId]);
 
   const views = useMemo<TaskView[]>(() => {
     return tasks
@@ -66,7 +83,7 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
     setSelected(null);
   }
 
-  if (!user.workerId) {
+  if (!isAdminPreview && !user.workerId) {
     return (
       <Card className="field-board">
         <p className="alert">この一般ユーザーにはworkerIdが設定されていません。usersドキュメントに作業員IDを設定してください。</p>
@@ -77,6 +94,21 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
   return (
     <div className="field-board">
       {error ? <p className="alert">{error}</p> : null}
+      {isAdminPreview ? (
+        <section className="field-worker-selector">
+          <Field label="確認する作業員">
+            <select value={selectedWorkerId} onChange={(event) => setSelectedWorkerId(event.target.value)}>
+              {activeWorkers.length === 0 ? <option value="">有効な作業員がありません</option> : null}
+              {activeWorkers.map((worker) => (
+                <option value={worker.id} key={worker.id}>
+                  {worker.displayName || worker.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <p className="helper-text">管理者用のスマホ表示確認です。実際の一般ユーザー画面と同じ作業カードを表示します。</p>
+        </section>
+      ) : null}
       {views.length === 0 ? <EmptyState message="自分に割り当てられた作業はありません。" /> : null}
       <div className="task-card-list">
         {groupedViews.map((group) => (
