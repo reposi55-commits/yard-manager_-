@@ -26,7 +26,8 @@ function escapeCsvCell(value: string | number | boolean | null | undefined): str
 }
 
 export function parseCsv(text: string): ParsedCsvRow[] {
-  const rows = parseCsvCells(text.replace(/^\uFEFF/, ""));
+  const body = text.replace(/^\uFEFF/, "");
+  const rows = parseCsvCells(body, detectDelimiter(body));
   if (rows.length === 0) return [];
   const headers = rows[0].map((header) => header.trim());
   return rows
@@ -37,7 +38,14 @@ export function parseCsv(text: string): ParsedCsvRow[] {
     );
 }
 
-function parseCsvCells(text: string): string[][] {
+function detectDelimiter(text: string): "," | "\t" {
+  const firstLine = text.split(/\r?\n/, 1)[0] || "";
+  const commaCount = (firstLine.match(/,/g) || []).length;
+  const tabCount = (firstLine.match(/\t/g) || []).length;
+  return tabCount > commaCount ? "\t" : ",";
+}
+
+function parseCsvCells(text: string, delimiter: "," | "\t"): string[][] {
   const rows: string[][] = [];
   let row: string[] = [];
   let cell = "";
@@ -61,7 +69,7 @@ function parseCsvCells(text: string): string[][] {
 
     if (char === '"') {
       quoted = true;
-    } else if (char === ",") {
+    } else if (char === delimiter) {
       row.push(cell);
       cell = "";
     } else if (char === "\n") {
