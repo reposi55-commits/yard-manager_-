@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
 import { changeRouteStatus, subscribeDaily, subscribeMasters } from "../services/firestoreService";
 import type { AppUser, Route, Station } from "../types";
-import { BUSINESS_DAY_MINUTES, formatTimestamp, offsetMinToLabel } from "../utils/date";
+import { BUSINESS_DAY_MINUTES, formatTimestamp, getDefaultBusinessDate, labelToOffsetMin, offsetMinToLabel } from "../utils/date";
 import { routeStatusLabels } from "../utils/status";
 
 const timeTicks = Array.from({ length: 13 }, (_, index) => index * 120);
@@ -12,9 +12,14 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
   const [routes, setRoutes] = useState<Route[]>([]);
   const [selected, setSelected] = useState<Route | null>(null);
   const [error, setError] = useState("");
+  const [now, setNow] = useState(() => new Date());
 
   useEffect(() => subscribeMasters("stations", user.siteId, setStations, setError), [user.siteId]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(new Date()), 60 * 1000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   const groupedStations = useMemo(() => {
     const groups = new Map<string, Station[]>();
@@ -25,6 +30,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
     });
     return [...groups.entries()];
   }, [stations, routes]);
+  const currentTime = useMemo(() => getCurrentTimeMarker(now, businessDate), [businessDate, now]);
 
   return (
     <Card>
@@ -36,12 +42,14 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
         <span className="legend-in-progress">{routeStatusLabels.in_progress}</span>
         <span className="legend-completed">{routeStatusLabels.completed}</span>
         <span className="legend-actual">実績あり</span>
+        {currentTime ? <span className="legend-current">現在 {currentTime.label}</span> : null}
       </div>
       <div className="gantt-wrap">
         <div className="gantt-time">
           <div className="station-label-head">ステーション</div>
           <div className="time-axis">
             {timeTicks.map((tick) => <span key={tick} style={{ left: `${(tick / BUSINESS_DAY_MINUTES) * 100}%` }}>{offsetMinToLabel(tick)}</span>)}
+            {currentTime ? <CurrentTimeMarker currentTime={currentTime} /> : null}
           </div>
         </div>
         {groupedStations.map(([area, group]) => (
@@ -56,6 +64,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
                     {!station.active ? <small>無効</small> : null}
                   </div>
                   <div className="gantt-lane">
+                    {currentTime ? <CurrentTimeMarker currentTime={currentTime} compact /> : null}
                     {stationRoutes.map((route) => {
                       const start = Math.max(0, route.plannedStartOffsetMin);
                       const end = Math.min(BUSINESS_DAY_MINUTES, Math.max(route.plannedEndOffsetMin, start + 30));
@@ -107,4 +116,32 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
       ) : null}
     </Card>
   );
+}
+
+function CurrentTimeMarker({
+  currentTime,
+  compact = false,
+}: {
+  currentTime: { label: string; percent: number };
+  compact?: boolean;
+}) {
+  return (
+    <div
+      className={`current-time-marker ${compact ? "compact" : ""}`}
+      style={{ left: `${currentTime.percent}%` }}
+      aria-label={`現在時刻 ${currentTime.label}`}
+    >
+      {!compact ? <span>{currentTime.label}</span> : null}
+    </div>
+  );
+}
+
+function getCurrentTimeMarker(now: Date, businessDate: string): { label: string; percent: number } | null {
+  if (getDefaultBusinessDate(now) !== businessDate) return null;
+  const label = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+  const offset = labelToOffsetMin(label);
+  return {
+    label,
+    percent: Math.min(100, Math.max(0, (offset / BUSINESS_DAY_MINUTES) * 100)),
+  };
 }

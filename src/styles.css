@@ -1202,6 +1202,10 @@ th {
   box-shadow: inset 0 -4px rgba(255, 255, 255, 0.34);
 }
 
+.legend-current {
+  background: #d92d20;
+}
+
 .gantt-time,
 .gantt-row {
   display: grid;
@@ -1239,6 +1243,56 @@ th {
   top: 14px;
   font-weight: 700;
   color: #53677a;
+}
+
+.current-time-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  z-index: 3;
+  width: 2px;
+  transform: translateX(-50%);
+  background: #d92d20;
+  pointer-events: none;
+}
+
+.current-time-marker::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 50%;
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+  background: #d92d20;
+  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.16);
+}
+
+.current-time-marker span {
+  position: absolute;
+  top: 12px;
+  left: 8px;
+  transform: none;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  padding: 2px 8px;
+  background: #d92d20;
+  color: #ffffff;
+  font-size: 0.78rem;
+  font-weight: 800;
+  white-space: nowrap;
+  box-shadow: 0 3px 8px rgba(22, 32, 51, 0.18);
+}
+
+.current-time-marker.compact {
+  opacity: 0.82;
+}
+
+.current-time-marker.compact::before {
+  top: 50%;
 }
 
 .gantt-area h3 {
