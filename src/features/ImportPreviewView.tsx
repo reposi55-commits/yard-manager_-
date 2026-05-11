@@ -61,10 +61,35 @@ const taskTemplate = [
 ];
 
 const requiredColumns: Record<ImportKind, string[]> = {
-  routes: ["種別", "便名", "便番号", "ステーション名", "予定開始", "予定終了"],
-  tasks: ["タスク", "作業員名", "レーン名", "対象便名", "対象便番号", "予定開始", "予定終了"],
+  routes: ["便名", "便番号", "ステーション名", "予定開始", "予定終了"],
+  tasks: ["タスク", "作業員名", "レーン名", "対象便番号", "予定開始", "予定終了"],
 };
 const optionalBusinessDateColumn = "対象日";
+
+const importColumnAliases: Record<ImportKind, Record<string, string[]>> = {
+  routes: {
+    種別: ["区分", "タイプ", "便種別", "メインサブ", "メイン/サブ"],
+    便名: ["ルート名", "ルート", "コース名", "コース", "便名称"],
+    便番号: ["便No", "便NO", "便No.", "便番", "便"],
+    ステーション名: ["ステーション", "ステーションNo", "ステーション番号", "バース", "場所"],
+    予定開始: ["開始", "開始時刻", "予定開始時刻", "開始時間"],
+    予定終了: ["終了", "終了時刻", "予定終了時刻", "終了時間"],
+    状態: ["ステータス", "状況"],
+    対象日: ["日付", "業務日", "運行日"],
+  },
+  tasks: {
+    タスク: ["作業", "作業名", "タスク名", "内容"],
+    作業員名: ["作業員", "担当者", "担当", "担当者名", "名前"],
+    レーン名: ["レーン", "レーンNo", "レーンNO", "レーン番号", "場所"],
+    対象便名: ["便名", "ルート名", "対象ルート", "対象ルート名", "対象便"],
+    対象便番号: ["便番号", "便No", "便NO", "便No.", "便番", "対象便No", "対象便NO", "対象便番", "便"],
+    予定開始: ["開始", "開始時刻", "予定開始時刻", "開始時間"],
+    予定終了: ["終了", "終了時刻", "予定終了時刻", "終了時間"],
+    状態: ["ステータス", "状況"],
+    補足指示: ["補足", "指示", "備考", "メモ", "コメント"],
+    対象日: ["日付", "業務日", "運行日"],
+  },
+};
 
 export function ImportPreviewView({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [kind, setKind] = useState<ImportKind>("routes");
@@ -175,7 +200,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
     setFileName(file.name);
     try {
       const text = await file.text();
-      setRows(parseCsv(text));
+      setRows(normalizeImportRows(kind, parseCsv(text)));
     } catch (caught) {
       setRows([]);
       setError(caught instanceof Error ? caught.message : "CSVの読み込みに失敗しました。");
@@ -201,7 +226,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
       setError("貼り付けるCSV本文を入力してください。");
       return;
     }
-    setRows(parseCsv(csvText));
+    setRows(normalizeImportRows(kind, parseCsv(csvText)));
     setFileName("貼り付けCSV");
   }
 
@@ -368,7 +393,7 @@ export function ImportPreviewView({ user, businessDate }: { user: AppUser; busin
           <textarea
             value={csvText}
             onChange={(event) => setCsvText(event.target.value)}
-            placeholder="テンプレートと同じ列名のCSV本文を貼り付けます"
+            placeholder="CSV本文またはExcelからコピーした表を貼り付けます"
           />
         </Field>
         <SecondaryButton type="button" onClick={handleTextImport}>
@@ -623,6 +648,137 @@ function withBusinessDate<T extends ParsedCsvRow>(rows: T[], businessDate: strin
   return rows.map((row) => ({ 対象日: businessDate, ...row }));
 }
 
+function normalizeImportRows(kind: ImportKind, rows: ParsedCsvRow[]): ParsedCsvRow[] {
+  return rows.map((row) => {
+    const normalized: ParsedCsvRow = { ...row };
+    const headerMap = buildHeaderMap(row);
+
+    Object.entries(importColumnAliases[kind]).forEach(([column, aliases]) => {
+      const value = findImportValue(row, headerMap, column, aliases);
+      if (value !== undefined) normalized[column] = trimImportValue(value);
+    });
+
+    normalized["予定開始"] = normalizeTimeInput(normalized["予定開始"]);
+    normalized["予定終了"] = normalizeTimeInput(normalized["予定終了"]);
+    normalized[optionalBusinessDateColumn] = normalizeDateInput(normalized[optionalBusinessDateColumn]);
+
+    if (kind === "routes") {
+      normalized["種別"] = normalizeRouteTypeInput(normalized["種別"]);
+      normalized["状態"] = normalizeRouteStatusInput(normalized["状態"]);
+    } else {
+      normalized["状態"] = normalizeTaskStatusInput(normalized["状態"]);
+    }
+
+    return normalized;
+  });
+}
+
+function buildHeaderMap(row: ParsedCsvRow): Map<string, string> {
+  return new Map(Object.keys(row).map((header) => [normalizeHeader(header), header]));
+}
+
+function findImportValue(
+  row: ParsedCsvRow,
+  headerMap: Map<string, string>,
+  column: string,
+  aliases: string[],
+): string | undefined {
+  const candidates = [column, ...aliases];
+  for (const candidate of candidates) {
+    const sourceHeader = headerMap.get(normalizeHeader(candidate));
+    if (sourceHeader && trimImportValue(row[sourceHeader])) return row[sourceHeader];
+  }
+  const sourceHeader = candidates.map((candidate) => headerMap.get(normalizeHeader(candidate))).find(Boolean);
+  return sourceHeader ? row[sourceHeader] : undefined;
+}
+
+function normalizeHeader(value: string): string {
+  return value.normalize("NFKC").replace(/[\s_＿\-－ー.．()（）[\]［］]/g, "").toLowerCase();
+}
+
+function trimImportValue(value: string | undefined): string {
+  return (value || "").replace(/\u3000/g, " ").trim();
+}
+
+function normalizeTimeInput(value: string | undefined): string {
+  const raw = trimImportValue(value);
+  if (!raw) return "";
+  const text = raw.normalize("NFKC").replace(/\s/g, "");
+  const serial = Number(text);
+  if (!Number.isNaN(serial) && serial > 0 && serial < 1) {
+    const minutes = Math.round(serial * 24 * 60);
+    return formatTime(Math.floor(minutes / 60), minutes % 60) || raw;
+  }
+  const colonMatch = /^(\d{1,2}):(\d{1,2})$/.exec(text);
+  if (colonMatch) return formatTime(Number(colonMatch[1]), Number(colonMatch[2])) || raw;
+  const compactMatch = /^(\d{3,4})$/.exec(text);
+  if (compactMatch) {
+    const hour = Number(text.slice(0, -2));
+    const minute = Number(text.slice(-2));
+    return formatTime(hour, minute) || raw;
+  }
+  const hourOnlyMatch = /^(\d{1,2})時$/.exec(text);
+  if (hourOnlyMatch) return formatTime(Number(hourOnlyMatch[1]), 0) || raw;
+  const japaneseMatch = /^(\d{1,2})時(\d{1,2})分?$/.exec(text);
+  if (japaneseMatch) return formatTime(Number(japaneseMatch[1]), Number(japaneseMatch[2])) || raw;
+  const hourNumberMatch = /^(\d{1,2})$/.exec(text);
+  if (hourNumberMatch) return formatTime(Number(hourNumberMatch[1]), 0) || raw;
+  return raw;
+}
+
+function formatTime(hour: number, minute: number): string | null {
+  if (hour < 0 || hour > 23 || minute < 0 || minute > 59) return null;
+  return `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+}
+
+function normalizeDateInput(value: string | undefined): string {
+  const raw = trimImportValue(value);
+  if (!raw) return "";
+  const text = raw.normalize("NFKC").replace(/[/.]/g, "-");
+  const match = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(text);
+  if (!match) return raw;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return raw;
+  return `${match[1]}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
+function normalizeRouteTypeInput(value: string | undefined): string {
+  const raw = trimImportValue(value);
+  if (!raw) return "main";
+  const key = normalizeInputKey(raw);
+  if (["main", "メイン", "本便", "主便", "親便"].includes(key)) return "main";
+  if (["sub", "サブ", "子便", "枝便"].includes(key)) return "sub";
+  return raw;
+}
+
+function normalizeRouteStatusInput(value: string | undefined): string {
+  const raw = trimImportValue(value);
+  if (!raw) return "waiting";
+  const key = normalizeInputKey(raw);
+  if (["waiting", "待機", "待機中", "未着手", "未開始"].includes(key)) return "waiting";
+  if (["inprogress", "作業中", "進行中", "開始", "開始済", "開始済み"].includes(key)) return "in_progress";
+  if (["completed", "完了", "完了済", "完了済み", "済"].includes(key)) return "completed";
+  return raw;
+}
+
+function normalizeTaskStatusInput(value: string | undefined): string {
+  const raw = trimImportValue(value);
+  if (!raw) return "pending";
+  const key = normalizeInputKey(raw);
+  if (["pending", "待機", "未着手", "未開始", "予定"].includes(key)) return "pending";
+  if (["ready", "準備完了", "準備ok", "準備済", "準備済み"].includes(key)) return "ready";
+  if (["inprogress", "作業中", "進行中", "開始", "開始済", "開始済み"].includes(key)) return "in_progress";
+  if (["completed", "完了", "完了済", "完了済み", "済"].includes(key)) return "completed";
+  return raw;
+}
+
+function normalizeInputKey(value: string): string {
+  return value.normalize("NFKC").replace(/[\s_＿\-－ー]/g, "").toLowerCase();
+}
+
 function buildSafetyNotes({
   kind,
   businessDate,
@@ -668,12 +824,15 @@ function findSkippedRows(
       if (kind === "routes") {
         const flightNumber = normalize(row["便番号"]);
         const routeName = normalize(row["便名"]);
-        const existing = flightNumber ? context.routes.find((route) => route.flightNumber === flightNumber) : undefined;
+        const existing =
+          flightNumber && routeName
+            ? context.routes.find((route) => route.routeName === routeName && route.flightNumber === flightNumber)
+            : undefined;
         return existing
           ? {
               rowNumber: index + 2,
-              reason: "同じ対象日の便番号が既にあります",
-              label: [routeName || existing.routeName, flightNumber].filter(Boolean).join(" / "),
+              reason: "同じ対象日の便名・便番号が既にあります",
+              label: [routeName, flightNumber].filter(Boolean).join(" / "),
             }
           : null;
       }
@@ -700,8 +859,12 @@ function validateRows(
   context: { routes: Route[]; tasks: Task[]; stations: Station[]; lanes: Lane[]; workers: Worker[]; businessDate: string },
 ): ValidationResult[] {
   const required = requiredColumns[kind];
-  const routeFlightCounts = countValues(rows.map((row) => normalize(row["便番号"])));
-  const taskCounts = countValues(rows.map((row) => `${normalize(row["対象便番号"])}::${normalize(row["タスク"])}`));
+  const routeIdentityCounts = countValues(
+    rows.map((row) => `${normalize(row["便名"])}::${normalize(row["便番号"])}`),
+  );
+  const taskCounts = countValues(
+    rows.map((row) => `${normalize(row["対象便名"])}::${normalize(row["対象便番号"])}::${normalize(row["タスク"])}`),
+  );
 
   return rows
     .map((row, index) => {
@@ -726,7 +889,7 @@ function validateRows(
       }
 
       if (kind === "routes") {
-        validateRouteRow(row, context.routes, context.stations, routeFlightCounts, rows, index, errors);
+        validateRouteRow(row, context.routes, context.stations, routeIdentityCounts, rows, index, errors);
       } else {
         validateTaskRow(row, context.routes, context.tasks, context.workers, context.lanes, taskCounts, rows, index, errors);
       }
@@ -740,21 +903,23 @@ function validateRouteRow(
   row: ParsedCsvRow,
   routes: Route[],
   stations: Station[],
-  routeFlightCounts: Map<string, number>,
+  routeIdentityCounts: Map<string, number>,
   rows: ParsedCsvRow[],
   rowIndex: number,
   errors: string[],
 ) {
   const type = normalize(row["種別"]);
+  const routeName = normalize(row["便名"]);
   const flightNumber = normalize(row["便番号"]);
   const stationName = normalize(row["ステーション名"]);
+  const routeIdentity = `${routeName}::${flightNumber}`;
 
   if (type && !["main", "sub"].includes(type)) errors.push("種別はmainまたはsubにしてください");
-  if (flightNumber && routes.some((route) => route.flightNumber === flightNumber)) {
-    errors.push("同じ対象日の便番号が既にあります");
+  if (routeName && flightNumber && routes.some((route) => route.routeName === routeName && route.flightNumber === flightNumber)) {
+    errors.push("同じ対象日の便名・便番号が既にあります");
   }
-  if (flightNumber && (routeFlightCounts.get(flightNumber) || 0) > 1) {
-    errors.push("CSV内で便番号が重複しています");
+  if (routeName && flightNumber && (routeIdentityCounts.get(routeIdentity) || 0) > 1) {
+    errors.push("CSV内で便名・便番号の組み合わせが重複しています");
   }
   if (stationName && !findActiveStation(stations, stationName)) {
     errors.push("ステーション名がマスタにありません");
@@ -786,14 +951,21 @@ function validateTaskRow(
   const worker = workerName ? findActiveWorker(workers, workerName) : undefined;
   const lane = laneName ? findActiveLane(lanes, laneName) : undefined;
   const route = targetFlightNumber ? findTargetMainRoute(routes, targetFlightNumber, targetRouteName) : undefined;
+  const targetRouteMatches = targetFlightNumber ? findTargetMainRoutes(routes, targetFlightNumber) : [];
 
   if (workerName && !worker) errors.push("作業員名がマスタにありません");
   if (laneName && !lane) errors.push("レーン名がマスタにありません");
-  if (targetFlightNumber && !route) errors.push("対象便番号に一致するメイン便がありません");
+  if (targetFlightNumber && !route) {
+    errors.push(
+      !targetRouteName && targetRouteMatches.length > 1
+        ? "対象便番号に一致するメイン便が複数あります。対象便名も入力してください"
+        : "対象便番号に一致するメイン便がありません",
+    );
+  }
   if (targetFlightNumber && targetRouteName && route && route.routeName !== targetRouteName) {
     errors.push("対象便名と対象便番号の組み合わせが一致しません");
   }
-  if (targetFlightNumber && taskName && (taskCounts.get(`${targetFlightNumber}::${taskName}`) || 0) > 1) {
+  if (targetFlightNumber && taskName && (taskCounts.get(`${targetRouteName}::${targetFlightNumber}::${taskName}`) || 0) > 1) {
     errors.push("CSV内で同じ対象便・同じタスクが重複しています");
   }
   if (route && taskName && tasks.some((task) => task.targetMainRouteId === route.id && task.taskName === taskName)) {
@@ -894,7 +1066,12 @@ function countValues(values: string[]): Map<string, number> {
 }
 
 function findActiveStation(stations: Station[], name: string): Station | undefined {
-  return stations.find((station) => station.active && station.name === name);
+  const exact = stations.find((station) => station.active && station.name === name);
+  if (exact) return exact;
+  const sortOrder = Number(name);
+  if (!Number.isInteger(sortOrder)) return undefined;
+  const matches = stations.filter((station) => station.active && station.sortOrder === sortOrder);
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function findActiveWorker(workers: Worker[], name: string): Worker | undefined {
@@ -902,13 +1079,22 @@ function findActiveWorker(workers: Worker[], name: string): Worker | undefined {
 }
 
 function findActiveLane(lanes: Lane[], name: string): Lane | undefined {
-  return lanes.find((lane) => lane.active && lane.name === name);
+  const exact = lanes.find((lane) => lane.active && lane.name === name);
+  if (exact) return exact;
+  const sortOrder = Number(name);
+  if (!Number.isInteger(sortOrder)) return undefined;
+  const matches = lanes.filter((lane) => lane.active && lane.sortOrder === sortOrder);
+  return matches.length === 1 ? matches[0] : undefined;
 }
 
 function findTargetMainRoute(routes: Route[], flightNumber: string, routeName: string): Route | undefined {
-  const matches = routes.filter((route) => route.type === "main" && route.flightNumber === flightNumber);
+  const matches = findTargetMainRoutes(routes, flightNumber);
   if (routeName) return matches.find((route) => route.routeName === routeName);
   return matches.length === 1 ? matches[0] : undefined;
+}
+
+function findTargetMainRoutes(routes: Route[], flightNumber: string): Route[] {
+  return routes.filter((route) => route.type === "main" && route.flightNumber === flightNumber);
 }
 
 function hasOverlap(tasks: Task[], field: "workerId" | "laneId", id: string, start: string, end: string): boolean {
