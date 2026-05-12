@@ -18,6 +18,8 @@ import { db, MASTER_BUSINESS_DATE } from "../lib/firebase";
 import type {
   AppUser,
   EntityMap,
+  LoadingItem,
+  LoadingItemStatus,
   LogAction,
   LogTargetType,
   OperationLog,
@@ -36,6 +38,7 @@ const targetTypeByCollection: Record<CollectionName, LogTargetType> = {
   routes: "route",
   tasks: "task",
   routeLinks: "routeLink",
+  loadingItems: "loadingItem",
   dialTemplates: "dialTemplate",
   templateRuns: "templateRun",
 };
@@ -54,6 +57,9 @@ function buildTargetLabel(collectionName: CollectionName, value: Record<string, 
     const sub = [value.subRouteName, value.subFlightNumber].filter(Boolean).join(" / ");
     const main = [value.mainRouteName, value.mainFlightNumber].filter(Boolean).join(" / ");
     return [sub, main].filter(Boolean).join(" → ");
+  }
+  if (collectionName === "loadingItems") {
+    return [value.supplierName, value.receivingName, value.orderNo, value.laneName].filter(Boolean).join(" / ");
   }
   if (collectionName === "dialTemplates") return String(value.name || "");
   if (collectionName === "templateRuns") return String(value.templateRunLabel || value.templateName || "");
@@ -127,7 +133,7 @@ export function subscribeMasters<K extends "stations" | "lanes" | "workers">(
   );
 }
 
-export function subscribeDaily<K extends "routes" | "tasks" | "routeLinks">(
+export function subscribeDaily<K extends "routes" | "tasks" | "routeLinks" | "loadingItems">(
   collectionName: K,
   siteId: string,
   businessDate: string,
@@ -283,6 +289,21 @@ export async function createEntity<K extends CollectionName>(
   return ref.id;
 }
 
+export async function createLoadingItem(
+  data: Omit<LoadingItem, "id" | "createdAt" | "updatedAt" | "createdBy" | "updatedBy" | "deleted">,
+  user: AppUser,
+): Promise<string> {
+  const now = Timestamp.now();
+  const payload = { ...data };
+  if (payload.status === "lane_in_progress" && !payload.actualLaneInStartAt) {
+    payload.actualLaneInStartAt = now;
+  }
+  if (payload.status === "lane_in_completed" && !payload.actualLaneInEndAt) {
+    payload.actualLaneInEndAt = now;
+  }
+  return createEntity("loadingItems", payload, user);
+}
+
 export async function updateEntity<K extends CollectionName>(
   collectionName: K,
   before: EntityMap[K],
@@ -338,4 +359,21 @@ export async function changeTaskStatus(task: Task, status: TaskStatus, user: App
     patch.actualEndAt = Timestamp.now();
   }
   await updateEntity("tasks", task, patch, user, "status_change");
+}
+
+export async function changeLoadingItemStatus(
+  item: LoadingItem,
+  status: LoadingItemStatus,
+  user: AppUser,
+  extraPatch: Partial<LoadingItem> = {},
+): Promise<void> {
+  const now = Timestamp.now();
+  const patch: Partial<LoadingItem> = { ...extraPatch, status };
+  if (status === "lane_in_progress" && !item.actualLaneInStartAt) {
+    patch.actualLaneInStartAt = now;
+  }
+  if (status === "lane_in_completed" && !item.actualLaneInEndAt) {
+    patch.actualLaneInEndAt = now;
+  }
+  await updateEntity("loadingItems", item, patch, user, "status_change");
 }

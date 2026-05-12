@@ -14,6 +14,7 @@ const targetLabels: Record<LogTargetType, string> = {
   route: "便",
   task: "タスク",
   routeLink: "便紐付け",
+  loadingItem: "投入荷物",
   dialTemplate: "テンプレート",
   templateRun: "テンプレート実行",
 };

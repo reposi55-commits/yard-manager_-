@@ -5,6 +5,7 @@ import {
   Timestamp,
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDoc,
   setDoc,
@@ -137,6 +138,27 @@ async function seedData() {
       updatedBy: "admin-user",
       workerId: "worker-2",
       workerName: "作業員B",
+    });
+    await setDoc(doc(db, "loadingItems", "loading-item-1"), {
+      actualLaneInEndAt: null,
+      actualLaneInStartAt: null,
+      businessDate,
+      createdAt: now,
+      createdBy: "admin-user",
+      deleted: false,
+      issueMemo: "",
+      laneId: "lane-1",
+      laneName: "A-01",
+      mainRouteId: "route-1",
+      orderNo: "ORD-001",
+      receivingName: "受入A",
+      safetyInstruction: "レーン周辺を確認",
+      siteId,
+      status: "planned",
+      subRouteId: "sub-route-1",
+      supplierName: "仕入先A",
+      updatedAt: now,
+      updatedBy: "admin-user",
     });
     await setDoc(doc(db, "dialTemplates", "template-1"), {
       active: true,
@@ -327,6 +349,101 @@ test("一般ユーザーは自分のタスク状態変更ログだけ作成で�
     targetLabel: "検品 / 作業員B",
     targetType: "task",
   }));
+});
+
+test("admin can create and logically delete same-site loadingItems", async () => {
+  const db = dbFor("admin-user");
+  await assertSucceeds(setDoc(doc(db, "loadingItems", "loading-item-new"), {
+    actualLaneInEndAt: null,
+    actualLaneInStartAt: null,
+    businessDate,
+    createdAt: now,
+    createdBy: "admin-user",
+    deleted: false,
+    issueMemo: "",
+    laneId: "lane-1",
+    laneName: "A-01",
+    mainRouteId: "route-1",
+    orderNo: "ORD-002",
+    receivingName: "受入B",
+    siteId,
+    status: "planned",
+    subRouteId: "sub-route-2",
+    supplierName: "仕入先B",
+    updatedAt: now,
+    updatedBy: "admin-user",
+  }));
+  await assertSucceeds(updateDoc(doc(db, "loadingItems", "loading-item-1"), {
+    deleted: true,
+    updatedAt: now,
+    updatedBy: "admin-user",
+  }));
+});
+
+test("user can read loadingItems and update only field status values", async () => {
+  const db = dbFor("worker-user");
+  await assertSucceeds(getDoc(doc(db, "loadingItems", "loading-item-1")));
+  await assertSucceeds(updateDoc(doc(db, "loadingItems", "loading-item-1"), {
+    actualLaneInStartAt: now,
+    status: "lane_in_progress",
+    updatedAt: now,
+    updatedBy: "worker-user",
+  }));
+  await assertFails(updateDoc(doc(db, "loadingItems", "loading-item-1"), {
+    laneName: "B-01",
+    updatedAt: now,
+    updatedBy: "worker-user",
+  }));
+  await assertFails(updateDoc(doc(db, "loadingItems", "loading-item-1"), {
+    deleted: true,
+    updatedAt: now,
+    updatedBy: "worker-user",
+  }));
+});
+
+test("physical deletes are denied for loadingItems", async () => {
+  const db = dbFor("admin-user");
+  await assertFails(deleteDoc(doc(db, "loadingItems", "loading-item-1")));
+});
+
+test("user can create loadingItem status-change logs but cannot edit logs", async () => {
+  const db = dbFor("worker-user");
+  await updateDoc(doc(db, "loadingItems", "loading-item-1"), {
+    issueMemo: "仕入先Aの一部が未着",
+    status: "shortage",
+    updatedAt: now,
+    updatedBy: "worker-user",
+  });
+  const logRef = await addDoc(collection(db, "operationLogs"), {
+    action: "status_change",
+    after: {
+      businessDate,
+      id: "loading-item-1",
+      issueMemo: "仕入先Aの一部が未着",
+      siteId,
+      status: "shortage",
+      updatedAt: now,
+      updatedBy: "worker-user",
+    },
+    before: {
+      businessDate,
+      id: "loading-item-1",
+      issueMemo: "",
+      siteId,
+      status: "planned",
+    },
+    businessDate,
+    operatedAt: now,
+    operatedBy: "worker-user",
+    siteId,
+    targetId: "loading-item-1",
+    targetLabel: "仕入先A / 受入A / ORD-001 / A-01",
+    targetType: "loadingItem",
+  });
+  await assertFails(updateDoc(logRef, {
+    targetLabel: "不正な変更",
+  }));
+  await assertFails(deleteDoc(logRef));
 });
 
 let failed = 0;

@@ -37,6 +37,15 @@
       ]
     },
     {
+      "collectionGroup": "loadingItems",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "siteId", "order": "ASCENDING" },
+        { "fieldPath": "businessDate", "order": "ASCENDING" },
+        { "fieldPath": "__name__", "order": "ASCENDING" }
+      ]
+    },
+    {
       "collectionGroup": "operationLogs",
       "queryScope": "COLLECTION",
       "fields": [

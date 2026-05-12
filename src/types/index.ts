@@ -4,7 +4,8 @@ export type UserRole = "admin" | "user";
 export type RouteStatus = "waiting" | "in_progress" | "completed";
 export type TaskStatus = "pending" | "ready" | "in_progress" | "completed";
 export type RouteType = "main" | "sub";
-export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink" | "dialTemplate" | "templateRun";
+export type LoadingItemStatus = "planned" | "sub_arrived" | "lane_in_progress" | "lane_in_completed" | "shortage" | "cancelled";
+export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink" | "loadingItem" | "dialTemplate" | "templateRun";
 export type LogAction = "create" | "update" | "delete" | "status_change";
 
 export type FirestoreDate = Timestamp | null;
@@ -106,6 +107,23 @@ export interface RouteLink extends BaseRecord {
   templateRunLabel?: string;
 }
 
+export interface LoadingItem extends BaseRecord {
+  subRouteId: string;
+  mainRouteId: string;
+  laneId: string;
+  laneName: string;
+  supplierName?: string;
+  receivingName?: string;
+  orderNo?: string;
+  status: LoadingItemStatus;
+  actualLaneInStartAt?: FirestoreDate;
+  actualLaneInEndAt?: FirestoreDate;
+  qualityInstruction?: string;
+  safetyInstruction?: string;
+  note?: string;
+  issueMemo?: string;
+}
+
 export interface DialTemplateRoute {
   key: string;
   type: RouteType;
@@ -168,6 +186,7 @@ export type EntityMap = {
   routes: Route;
   tasks: Task;
   routeLinks: RouteLink;
+  loadingItems: LoadingItem;
   dialTemplates: DialTemplate;
   templateRuns: TemplateRun;
 };

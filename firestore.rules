@@ -21,7 +21,7 @@ service cloud.firestore {
     }
 
     function knownAppCollection(collectionName) {
-      return collectionName in ["stations", "lanes", "workers", "routes", "tasks", "routeLinks"];
+      return collectionName in ["stations", "lanes", "workers", "routes", "tasks", "routeLinks", "loadingItems"];
     }
 
     function sameSiteResource() {
@@ -49,8 +49,24 @@ service cloud.firestore {
         && statusOnlyUpdate();
     }
 
+    function loadingItemStatusUpdate(collectionName) {
+      return activeUser()
+        && userDoc().data.role == "user"
+        && collectionName == "loadingItems"
+        && sameSiteResource()
+        && request.resource.data.siteId == resource.data.siteId
+        && request.resource.data.businessDate == resource.data.businessDate
+        && request.resource.data.updatedBy == request.auth.uid
+        && request.resource.data.status in ["planned", "sub_arrived", "lane_in_progress", "lane_in_completed", "shortage", "cancelled"]
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["status", "actualLaneInStartAt", "actualLaneInEndAt", "issueMemo", "updatedAt", "updatedBy"]);
+    }
+
     function targetTask() {
       return get(/databases/$(database)/documents/tasks/$(request.resource.data.targetId));
+    }
+
+    function targetLoadingItem() {
+      return get(/databases/$(database)/documents/loadingItems/$(request.resource.data.targetId));
     }
 
     function logMatchesCurrentTask() {
@@ -59,6 +75,13 @@ service cloud.firestore {
         && targetTask().data.businessDate == request.resource.data.businessDate
         && targetTask().data.workerId == userDoc().data.workerId
         && targetTask().data.status == request.resource.data.after.status;
+    }
+
+    function logMatchesCurrentLoadingItem() {
+      return exists(/databases/$(database)/documents/loadingItems/$(request.resource.data.targetId))
+        && targetLoadingItem().data.siteId == userDoc().data.siteId
+        && targetLoadingItem().data.businessDate == request.resource.data.businessDate
+        && targetLoadingItem().data.status == request.resource.data.after.status;
     }
 
     function adminSameSiteCreate() {
@@ -92,6 +115,25 @@ service cloud.firestore {
         && request.resource.data.before.siteId == userDoc().data.siteId
         && request.resource.data.after.siteId == userDoc().data.siteId
         && logMatchesCurrentTask();
+    }
+
+    function userLoadingItemStatusLog() {
+      return userDoc().data.role == "user"
+        && request.resource.data.keys().hasOnly(["siteId", "businessDate", "targetType", "targetId", "targetLabel", "action", "before", "after", "operatedBy", "operatedAt"])
+        && request.resource.data.targetType == "loadingItem"
+        && request.resource.data.action == "status_change"
+        && request.resource.data.before is map
+        && request.resource.data.after is map
+        && request.resource.data.operatedAt is timestamp
+        && request.resource.data.targetId == request.resource.data.before.id
+        && request.resource.data.targetId == request.resource.data.after.id
+        && request.resource.data.before.siteId == userDoc().data.siteId
+        && request.resource.data.after.siteId == userDoc().data.siteId
+        && request.resource.data.before.businessDate == request.resource.data.businessDate
+        && request.resource.data.after.businessDate == request.resource.data.businessDate
+        && request.resource.data.after.status in ["planned", "sub_arrived", "lane_in_progress", "lane_in_completed", "shortage", "cancelled"]
+        && request.resource.data.after.diff(request.resource.data.before).affectedKeys().hasOnly(["status", "actualLaneInStartAt", "actualLaneInEndAt", "issueMemo", "updatedAt", "updatedBy"])
+        && logMatchesCurrentLoadingItem();
     }
 
     function adminUserProfileUpdate() {
@@ -133,7 +175,7 @@ service cloud.firestore {
       allow create: if activeUser()
         && request.resource.data.operatedBy == request.auth.uid
         && request.resource.data.siteId == userDoc().data.siteId
-        && (isAdmin() || userTaskStatusLog());
+        && (isAdmin() || userTaskStatusLog() || userLoadingItemStatusLog());
       allow update, delete: if false;
     }
 
@@ -155,7 +197,7 @@ service cloud.firestore {
       allow read: if activeUser() && canReadAppDocument(collection);
       allow create: if knownAppCollection(collection) && adminSameSiteCreate();
       allow update: if knownAppCollection(collection)
-        && (adminSameSiteUpdate() || workerOwnTaskStatusUpdate(collection));
+        && (adminSameSiteUpdate() || workerOwnTaskStatusUpdate(collection) || loadingItemStatusUpdate(collection));
       allow delete: if false;
     }
   }
