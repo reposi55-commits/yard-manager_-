@@ -39,7 +39,17 @@ const loadingItemDefaults = {
   issueMemo: "",
 };
 
-export function LoadingItemManagement({ user, businessDate }: { user: AppUser; businessDate: string }) {
+type LoadingItemManagementMode = "manage" | "import";
+
+export function LoadingItemManagement({
+  user,
+  businessDate,
+  mode = "manage",
+}: {
+  user: AppUser;
+  businessDate: string;
+  mode?: LoadingItemManagementMode;
+}) {
   const [items, setItems] = useState<LoadingItem[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
@@ -51,7 +61,6 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
   const [success, setSuccess] = useState("");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LoadingItemStatus>("all");
-  const [activePanel, setActivePanel] = useState<"list" | "import">("list");
   const [csvEncoding, setCsvEncoding] = useState<LoadingItemImportEncoding>("utf-8");
   const [importRows, setImportRows] = useState<LoadingItemImportPreviewRow[]>([]);
   const [importFileName, setImportFileName] = useState("");
@@ -69,6 +78,7 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
   const formIssues = useMemo(() => buildLoadingItemIssues(draft, subRoutes, mainRoutes, selectableLanes), [draft, mainRoutes, selectableLanes, subRoutes]);
   const importSummary = useMemo(() => summarizeImportRows(importRows), [importRows]);
   const canImport = importRows.length > 0 && importSummary.errors === 0 && importSummary.targets > 0 && !importSaving;
+  const isImportMode = mode === "import";
 
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -112,18 +122,6 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
     setEditing(null);
     setError("");
     setFormOpen(true);
-  }
-
-  function openImportPanel() {
-    setActivePanel("import");
-    setError("");
-    setSuccess("");
-  }
-
-  function openListPanel() {
-    setActivePanel("list");
-    setError("");
-    setSuccess("");
   }
 
   function openEditForm(item: LoadingItem) {
@@ -271,24 +269,24 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
       <div className="section-header">
         <div>
           <p className="eyebrow">Loading Items</p>
-          <h2>積み付け情報管理</h2>
+          <h2>{isImportMode ? "積み付け情報CSV取込" : "積み付け情報管理"}</h2>
         </div>
-        <div className="form-actions">
-          <SecondaryButton type="button" onClick={openImportPanel}>CSV取込</SecondaryButton>
-          <PrimaryButton type="button" onClick={openCreateForm}>積み付け情報を追加</PrimaryButton>
-        </div>
+        {!isImportMode ? (
+          <div className="form-actions">
+            <PrimaryButton type="button" onClick={openCreateForm}>積み付け情報を追加</PrimaryButton>
+          </div>
+        ) : null}
       </div>
 
       {error ? <p className="alert">{error}</p> : null}
       {success ? <p className="success-message">{success}</p> : null}
-      <p className="helper-text">作業開始可否とレーン安全判定に使う積み付け情報を、サブ便・メイン便・レーン・仕入先・受入・オーダー単位で登録します。</p>
+      <p className="helper-text">
+        {isImportMode
+          ? "月次・定期更新に近い積み付け情報をCSVから一括取込します。取込先は右上の対象日です。"
+          : "作業開始可否とレーン安全判定に使う日次の積み付け情報を、サブ便・メイン便・レーン・仕入先・受入・オーダー単位で管理します。"}
+      </p>
 
-      <div className="template-mode-tabs loading-item-tabs" role="tablist" aria-label="積み付け情報表示切替">
-        <button type="button" className={activePanel === "list" ? "active" : ""} onClick={openListPanel}>一覧・手動編集</button>
-        <button type="button" className={activePanel === "import" ? "active" : ""} onClick={openImportPanel}>CSV取込</button>
-      </div>
-
-      {activePanel === "list" && items.length > 0 ? (
+      {!isImportMode && items.length > 0 ? (
         <div className="filter-bar loading-item-filter">
           <Field label="検索">
             <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="便・レーン・仕入先・受入・オーダー" />
@@ -302,7 +300,7 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
         </div>
       ) : null}
 
-      {activePanel === "list" ? (
+      {!isImportMode ? (
         <>
       {items.length === 0 ? <EmptyState message="この対象日の積み付け情報はまだありません。" /> : null}
       {items.length > 0 && filteredItems.length === 0 ? <EmptyState message="条件に一致する積み付け情報はありません。" /> : null}

@@ -41,7 +41,8 @@ export default function App() {
         {activeTab === "driver" ? <DriverBoard user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "exports" ? <ExportView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "imports" ? <ImportPreviewView user={appUser} businessDate={businessDate} /> : null}
-        {activeTab === "loadingItems" ? <LoadingItemManagement user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "loadingItems" ? <LoadingItemManagement user={appUser} businessDate={businessDate} mode="manage" /> : null}
+        {activeTab === "loadingItemImports" ? <LoadingItemManagement user={appUser} businessDate={businessDate} mode="import" /> : null}
         {activeTab === "stations" ? <MasterManagement kind="stations" user={appUser} /> : null}
         {activeTab === "lanes" ? <MasterManagement kind="lanes" user={appUser} /> : null}
         {activeTab === "workers" ? <MasterManagement kind="workers" user={appUser} /> : null}

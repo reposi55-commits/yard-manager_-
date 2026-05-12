@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import { Card, EmptyState, Modal, PrimaryButton, SecondaryButton, StatusBadge } from "../components/ui";
-import { changeRouteStatus, subscribeDaily, subscribeMasters } from "../services/firestoreService";
-import type { AppUser, Route, Station } from "../types";
+import { changeLoadingItemStatus, changeRouteStatus, subscribeDaily, subscribeMasters } from "../services/firestoreService";
+import type { AppUser, LoadingItem, Route, Station } from "../types";
 import { BUSINESS_DAY_MINUTES, formatTimestamp, getDefaultBusinessDate, labelToOffsetMin, offsetMinToLabel } from "../utils/date";
 import { routeStatusLabels } from "../utils/status";
 
@@ -20,6 +20,7 @@ const MIN_ROUTE_DURATION_MINUTES = 30;
 export function DriverBoard({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [stations, setStations] = useState<Station[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
+  const [loadingItems, setLoadingItems] = useState<LoadingItem[]>([]);
   const [selected, setSelected] = useState<Route | null>(null);
   const [error, setError] = useState("");
   const [now, setNow] = useState(() => new Date());
@@ -27,6 +28,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
 
   useEffect(() => subscribeMasters("stations", user.siteId, setStations, setError), [user.siteId]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
+  useEffect(() => subscribeDaily("loadingItems", user.siteId, businessDate, setLoadingItems, setError), [user.siteId, businessDate]);
   useEffect(() => {
     const timer = window.setInterval(() => setNow(new Date()), 60 * 1000);
     return () => window.clearInterval(timer);
@@ -46,6 +48,18 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
   const timeTicks = useMemo(() => buildTimeTicks(visibleRange), [visibleRange]);
   const rangeMinutes = visibleRange.end - visibleRange.start;
   const gridColumnCount = Math.max(1, rangeMinutes / HOUR_MINUTES);
+
+  async function completeRoute(route: Route) {
+    try {
+      await changeRouteStatus(route, "completed", user);
+      if (route.type === "sub") {
+        await completeRelatedLoadingItems(route, loadingItems, user);
+      }
+      setSelected(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "便の完了処理に失敗しました。");
+    }
+  }
 
   return (
     <Card>
@@ -131,7 +145,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
           footer={
             <>
               {selected.status === "waiting" ? <PrimaryButton type="button" onClick={() => changeRouteStatus(selected, "in_progress", user).then(() => setSelected(null))}>作業開始</PrimaryButton> : null}
-              {selected.status === "in_progress" ? <PrimaryButton type="button" onClick={() => changeRouteStatus(selected, "completed", user).then(() => setSelected(null))}>作業完了</PrimaryButton> : null}
+              {selected.status === "in_progress" ? <PrimaryButton type="button" onClick={() => void completeRoute(selected)}>作業完了</PrimaryButton> : null}
               {selected.status !== "waiting" ? <SecondaryButton type="button" onClick={() => changeRouteStatus(selected, "waiting", user).then(() => setSelected(null))}>待機に戻す</SecondaryButton> : null}
             </>
           }
@@ -245,4 +259,16 @@ function durationToPercent(duration: number, range: GanttRange): number {
 
 function isOffsetInRange(offset: number, range: GanttRange): boolean {
   return offset >= range.start && offset <= range.end;
+}
+
+async function completeRelatedLoadingItems(route: Route, loadingItems: LoadingItem[], user: AppUser): Promise<void> {
+  const targets = loadingItems.filter((item) => shouldCompleteWithSubRoute(item, route.id));
+  await Promise.all(targets.map((item) => changeLoadingItemStatus(item, "lane_in_completed", user)));
+}
+
+function shouldCompleteWithSubRoute(item: LoadingItem, subRouteId: string): boolean {
+  if (item.subRouteId !== subRouteId) return false;
+  if (item.status === "shortage" || item.status === "cancelled" || item.status === "lane_in_progress" || item.status === "lane_in_completed") return false;
+  if (item.actualLaneInStartAt || item.actualLaneInEndAt) return false;
+  return true;
 }
