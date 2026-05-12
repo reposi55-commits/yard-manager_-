@@ -34,7 +34,7 @@ export function buildBlockedReasons(
   const reasons: string[] = [];
   if (routeBlocked) reasons.push("開始不可：未完了のサブ便があります");
   if (relatedLoadingItems.length === 0) {
-    reasons.push("搬入情報が未登録です。管理者に確認してください。");
+    reasons.push("積み付け情報が未登録です。管理者に確認してください。");
     return reasons;
   }
   if (shortageItems.length > 0) reasons.push("開始不可：欠品登録があります");

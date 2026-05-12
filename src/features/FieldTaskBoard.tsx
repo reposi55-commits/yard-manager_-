@@ -250,7 +250,7 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
             ) : null}
             {selected.loadingItems.length > 0 ? (
               <div className="detail-wide">
-                <span>搬入明細</span>
+                <span>積み付け情報</span>
                 <div className="field-loading-list">
                   {selected.loadingItems.map((item) => (
                     <article className={`field-loading-item status-${item.status}`} key={item.id}>
@@ -268,7 +268,7 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
                 </div>
               </div>
             ) : (
-              <div><span>搬入明細</span><strong>未登録です。管理者に確認してください。</strong></div>
+              <div><span>積み付け情報</span><strong>未登録です。管理者に確認してください。</strong></div>
             )}
             {selected.task.instruction ? <p className="instruction detail-instruction">{selected.task.instruction}</p> : null}
           </div>

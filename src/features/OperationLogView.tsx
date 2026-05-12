@@ -14,7 +14,7 @@ const targetLabels: Record<LogTargetType, string> = {
   route: "便",
   task: "タスク",
   routeLink: "便紐付け",
-  loadingItem: "投入荷物",
+  loadingItem: "積み付け情報",
   dialTemplate: "テンプレート",
   templateRun: "テンプレート実行",
 };
@@ -24,6 +24,7 @@ const actionLabels: Record<LogAction, string> = {
   update: "更新",
   delete: "論理削除",
   status_change: "ステータス変更",
+  import: "CSV取込",
 };
 
 export function OperationLogView({ user, businessDate }: { user: AppUser; businessDate: string }) {
@@ -159,6 +160,7 @@ function summarizeChange(log: OperationLog): string {
     return actualTimeNote ? `${beforeStatus} → ${afterStatus} / ${actualTimeNote}` : `${beforeStatus} → ${afterStatus}`;
   }
   if (log.action === "create") return "新規作成";
+  if (log.action === "import") return "CSV取込";
   if (log.action === "delete") return "論理削除";
   return "内容更新";
 }

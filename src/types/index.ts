@@ -6,7 +6,7 @@ export type TaskStatus = "pending" | "ready" | "in_progress" | "completed";
 export type RouteType = "main" | "sub";
 export type LoadingItemStatus = "planned" | "sub_arrived" | "lane_in_progress" | "lane_in_completed" | "shortage" | "cancelled";
 export type LogTargetType = "station" | "lane" | "worker" | "user" | "route" | "task" | "routeLink" | "loadingItem" | "dialTemplate" | "templateRun";
-export type LogAction = "create" | "update" | "delete" | "status_change";
+export type LogAction = "create" | "update" | "delete" | "status_change" | "import";
 
 export type FirestoreDate = Timestamp | null;
 
@@ -122,6 +122,10 @@ export interface LoadingItem extends BaseRecord {
   safetyInstruction?: string;
   note?: string;
   issueMemo?: string;
+  source?: "manual" | "csv";
+  importBatchId?: string;
+  importRowNo?: number;
+  externalKey?: string;
 }
 
 export interface DialTemplateRoute {

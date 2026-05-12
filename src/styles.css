@@ -309,6 +309,23 @@ button {
   min-width: 1180px;
 }
 
+.loading-item-tabs {
+  margin-bottom: 16px;
+}
+
+.loading-item-import-toolbar {
+  grid-template-columns: minmax(180px, 0.6fr) minmax(280px, 1.2fr) auto;
+}
+
+.loading-item-import-table {
+  min-width: 1080px;
+}
+
+.import-message-cell {
+  min-width: 240px;
+  line-height: 1.5;
+}
+
 .loading-item-notes {
   min-width: 220px;
 }

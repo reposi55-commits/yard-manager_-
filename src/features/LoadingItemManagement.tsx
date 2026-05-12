@@ -1,8 +1,18 @@
 import { useEffect, useMemo, useState } from "react";
 import { Card, DangerButton, EmptyState, Field, FormCheckPanel, Modal, PrimaryButton, SecondaryButton } from "../components/ui";
-import { changeLoadingItemStatus, createLoadingItem, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
-import type { AppUser, Lane, LoadingItem, LoadingItemStatus, Route, Task } from "../types";
+import { changeLoadingItemStatus, createEntity, createLoadingItem, softDeleteEntity, subscribeDaily, updateEntity } from "../services/firestoreService";
+import type { AppUser, Lane, LoadingItem, LoadingItemStatus, Route, RouteLink, Task } from "../types";
 import { buildLaneWorkSafetyIssue } from "../utils/loadingItemGuards";
+import {
+  buildLoadingItemImportPreviewRows,
+  formatLoadingItemImportRoute,
+  loadingItemImportTemplate,
+  readLoadingItemCsv,
+  withImportBatch,
+  type LoadingItemImportEncoding,
+  type LoadingItemImportPreviewRow,
+} from "../utils/loadingItemImport";
+import { downloadCsv } from "../utils/csv";
 import { useMasterOptions } from "./MasterManagement";
 
 const loadingItemStatusLabels: Record<LoadingItemStatus, string> = {
@@ -33,22 +43,32 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
   const [items, setItems] = useState<LoadingItem[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
   const [tasks, setTasks] = useState<Task[]>([]);
+  const [routeLinks, setRouteLinks] = useState<RouteLink[]>([]);
   const [draft, setDraft] = useState(loadingItemDefaults);
   const [editing, setEditing] = useState<LoadingItem | null>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [searchText, setSearchText] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | LoadingItemStatus>("all");
+  const [activePanel, setActivePanel] = useState<"list" | "import">("list");
+  const [csvEncoding, setCsvEncoding] = useState<LoadingItemImportEncoding>("utf-8");
+  const [importRows, setImportRows] = useState<LoadingItemImportPreviewRow[]>([]);
+  const [importFileName, setImportFileName] = useState("");
+  const [importSaving, setImportSaving] = useState(false);
   const { lanes } = useMasterOptions(user);
 
   useEffect(() => subscribeDaily("loadingItems", user.siteId, businessDate, setItems, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("routes", user.siteId, businessDate, setRoutes, setError), [user.siteId, businessDate]);
   useEffect(() => subscribeDaily("tasks", user.siteId, businessDate, setTasks, setError), [user.siteId, businessDate]);
+  useEffect(() => subscribeDaily("routeLinks", user.siteId, businessDate, setRouteLinks, setError), [user.siteId, businessDate]);
 
   const subRoutes = useMemo(() => routes.filter((route) => route.type === "sub"), [routes]);
   const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
   const selectableLanes = useMemo(() => lanes.filter((lane) => lane.active || lane.id === draft.laneId), [draft.laneId, lanes]);
   const formIssues = useMemo(() => buildLoadingItemIssues(draft, subRoutes, mainRoutes, selectableLanes), [draft, mainRoutes, selectableLanes, subRoutes]);
+  const importSummary = useMemo(() => summarizeImportRows(importRows), [importRows]);
+  const canImport = importRows.length > 0 && importSummary.errors === 0 && importSummary.targets > 0 && !importSaving;
 
   const filteredItems = useMemo(() => {
     const keyword = searchText.trim().toLowerCase();
@@ -92,6 +112,18 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
     setEditing(null);
     setError("");
     setFormOpen(true);
+  }
+
+  function openImportPanel() {
+    setActivePanel("import");
+    setError("");
+    setSuccess("");
+  }
+
+  function openListPanel() {
+    setActivePanel("list");
+    setError("");
+    setSuccess("");
   }
 
   function openEditForm(item: LoadingItem) {
@@ -168,7 +200,7 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
       }
       closeForm();
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : "搬入明細の保存に失敗しました。");
+      setError(caught instanceof Error ? caught.message : "積み付け情報の保存に失敗しました。");
     }
   }
 
@@ -178,20 +210,85 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
     await softDeleteEntity("loadingItems", item, user);
   }
 
+  async function handleImportFile(file: File | undefined) {
+    if (!file) return;
+    setError("");
+    setSuccess("");
+    setImportRows([]);
+    setImportFileName(file.name);
+    try {
+      const rows = await readLoadingItemCsv(file, csvEncoding);
+      setImportRows(buildLoadingItemImportPreviewRows(rows, {
+        siteId: user.siteId,
+        businessDate,
+        routes,
+        lanes,
+        routeLinks,
+        loadingItems: items,
+      }));
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "CSVの読み込みに失敗しました。");
+    }
+  }
+
+  function downloadImportTemplate() {
+    downloadCsv("yardmanager-loading-items-import-template.csv", loadingItemImportTemplate);
+  }
+
+  async function executeImport() {
+    if (!canImport) {
+      setError(importSummary.errors > 0 ? "エラーがあるため取込できません。CSVを修正して再度プレビューしてください。" : "取込対象がありません。");
+      return;
+    }
+
+    const importBatchId = createImportBatchId();
+    const targetRows = importRows.filter((row) => row.payload && (row.action === "create" || row.action === "update"));
+    setImportSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      for (const row of targetRows) {
+        if (!row.payload) continue;
+        const payload = withImportBatch(row.payload, importBatchId);
+        if (row.action === "create") {
+          await createEntity("loadingItems", payload, user, "import");
+        } else if (row.action === "update" && row.existingItem) {
+          await updateEntity("loadingItems", row.existingItem, payload, user, "import");
+        }
+      }
+      setSuccess(`積み付け情報を${targetRows.length}件取り込みました。`);
+      setImportRows([]);
+      setImportFileName("");
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "積み付け情報のCSV取込に失敗しました。");
+    } finally {
+      setImportSaving(false);
+    }
+  }
+
   return (
     <Card className="loading-items-card">
       <div className="section-header">
         <div>
           <p className="eyebrow">Loading Items</p>
-          <h2>搬入明細管理</h2>
+          <h2>積み付け情報管理</h2>
         </div>
-        <PrimaryButton type="button" onClick={openCreateForm}>搬入明細を追加</PrimaryButton>
+        <div className="form-actions">
+          <SecondaryButton type="button" onClick={openImportPanel}>CSV取込</SecondaryButton>
+          <PrimaryButton type="button" onClick={openCreateForm}>積み付け情報を追加</PrimaryButton>
+        </div>
       </div>
 
       {error ? <p className="alert">{error}</p> : null}
-      <p className="helper-text">サブ便から届く荷物を、メイン便・レーン・仕入先・受入・オーダー単位で登録します。</p>
+      {success ? <p className="success-message">{success}</p> : null}
+      <p className="helper-text">作業開始可否とレーン安全判定に使う積み付け情報を、サブ便・メイン便・レーン・仕入先・受入・オーダー単位で登録します。</p>
 
-      {items.length > 0 ? (
+      <div className="template-mode-tabs loading-item-tabs" role="tablist" aria-label="積み付け情報表示切替">
+        <button type="button" className={activePanel === "list" ? "active" : ""} onClick={openListPanel}>一覧・手動編集</button>
+        <button type="button" className={activePanel === "import" ? "active" : ""} onClick={openImportPanel}>CSV取込</button>
+      </div>
+
+      {activePanel === "list" && items.length > 0 ? (
         <div className="filter-bar loading-item-filter">
           <Field label="検索">
             <input value={searchText} onChange={(event) => setSearchText(event.target.value)} placeholder="便・レーン・仕入先・受入・オーダー" />
@@ -205,8 +302,10 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
         </div>
       ) : null}
 
-      {items.length === 0 ? <EmptyState message="この対象日の搬入明細はまだありません。" /> : null}
-      {items.length > 0 && filteredItems.length === 0 ? <EmptyState message="条件に一致する搬入明細はありません。" /> : null}
+      {activePanel === "list" ? (
+        <>
+      {items.length === 0 ? <EmptyState message="この対象日の積み付け情報はまだありません。" /> : null}
+      {items.length > 0 && filteredItems.length === 0 ? <EmptyState message="条件に一致する積み付け情報はありません。" /> : null}
 
       <div className="table-wrap">
         <table className="loading-items-table">
@@ -255,10 +354,25 @@ export function LoadingItemManagement({ user, businessDate }: { user: AppUser; b
           </tbody>
         </table>
       </div>
+        </>
+      ) : (
+        <LoadingItemImportPanel
+          encoding={csvEncoding}
+          fileName={importFileName}
+          rows={importRows}
+          summary={importSummary}
+          canImport={canImport}
+          saving={importSaving}
+          onEncodingChange={setCsvEncoding}
+          onFileChange={(file) => void handleImportFile(file)}
+          onDownloadTemplate={downloadImportTemplate}
+          onExecuteImport={() => void executeImport()}
+        />
+      )}
 
       {formOpen ? (
         <Modal
-          title={editing ? "搬入明細を編集" : "搬入明細を追加"}
+          title={editing ? "積み付け情報を編集" : "積み付け情報を追加"}
           onClose={closeForm}
           footer={
             <>
@@ -352,4 +466,131 @@ function routeLabel(route: Route | undefined): string {
 function buildItemLabel(item: LoadingItem, routes: Route[]): string {
   const subRoute = routes.find((route) => route.id === item.subRouteId);
   return [routeLabel(subRoute), item.supplierName, item.receivingName, item.orderNo].filter(Boolean).join(" / ");
+}
+
+function LoadingItemImportPanel({
+  encoding,
+  fileName,
+  rows,
+  summary,
+  canImport,
+  saving,
+  onEncodingChange,
+  onFileChange,
+  onDownloadTemplate,
+  onExecuteImport,
+}: {
+  encoding: LoadingItemImportEncoding;
+  fileName: string;
+  rows: LoadingItemImportPreviewRow[];
+  summary: ReturnType<typeof summarizeImportRows>;
+  canImport: boolean;
+  saving: boolean;
+  onEncodingChange: (value: LoadingItemImportEncoding) => void;
+  onFileChange: (file: File | undefined) => void;
+  onDownloadTemplate: () => void;
+  onExecuteImport: () => void;
+}) {
+  return (
+    <section className="import-panel loading-item-import-panel">
+      <div className="import-toolbar loading-item-import-toolbar">
+        <Field label="文字コード">
+          <select value={encoding} onChange={(event) => onEncodingChange(event.target.value as LoadingItemImportEncoding)}>
+            <option value="utf-8">UTF-8</option>
+            <option value="shift-jis">Shift-JIS</option>
+          </select>
+        </Field>
+        <Field label="CSVファイル">
+          <input type="file" accept=".csv,text/csv" onChange={(event) => onFileChange(event.target.files?.[0])} />
+        </Field>
+        <div className="form-actions import-actions">
+          <SecondaryButton type="button" onClick={onDownloadTemplate}>テンプレートCSV</SecondaryButton>
+          <PrimaryButton type="button" disabled={!canImport} onClick={onExecuteImport}>
+            {saving ? "取込中..." : "取込実行"}
+          </PrimaryButton>
+        </div>
+      </div>
+
+      <p className="helper-text">
+        {fileName ? `${fileName} のプレビューです。` : "CSVを選択すると取込前プレビューを表示します。エラーが1件でもある場合は保存できません。"}
+      </p>
+
+      <div className="import-summary">
+        <ImportMetric label="CSV行" value={`${rows.length}件`} />
+        <ImportMetric label="作成" value={`${summary.create}件`} />
+        <ImportMetric label="更新" value={`${summary.update}件`} />
+        <ImportMetric label="スキップ" value={`${summary.skip}件`} />
+        <ImportMetric label="エラー" value={`${summary.errors}件`} />
+      </div>
+
+      {rows.length === 0 ? <EmptyState message="取込前プレビューはまだありません。" /> : null}
+      {rows.length > 0 ? (
+        <div className="table-wrap">
+          <table className="loading-item-import-table">
+            <thead>
+              <tr>
+                <th>行番号</th>
+                <th>判定</th>
+                <th>サブ便</th>
+                <th>メイン便</th>
+                <th>レーン</th>
+                <th>エラー</th>
+                <th>警告</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map((row) => (
+                <tr key={`${row.rowNumber}-${row.externalKey}`}>
+                  <td>{row.rowNumber}</td>
+                  <td><ImportActionBadge action={row.action} /></td>
+                  <td>{formatLoadingItemImportRoute(row.subRoute)}</td>
+                  <td>{formatLoadingItemImportRoute(row.mainRoute)}</td>
+                  <td>{row.lane?.name || "-"}</td>
+                  <td className="import-message-cell">{row.errors.length > 0 ? row.errors.join(" / ") : "-"}</td>
+                  <td className="import-message-cell">{row.warnings.length > 0 ? row.warnings.join(" / ") : "-"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function ImportMetric({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="import-metric">
+      <span>{label}</span>
+      <strong>{value}</strong>
+    </div>
+  );
+}
+
+function ImportActionBadge({ action }: { action: LoadingItemImportPreviewRow["action"] }) {
+  const labels: Record<LoadingItemImportPreviewRow["action"], string> = {
+    create: "作成",
+    update: "更新",
+    skip: "スキップ",
+    error: "エラー",
+  };
+  const tone = action === "error" ? "error" : action === "skip" ? "skip" : "ok";
+  return <span className={`import-row-status ${tone}`}>{labels[action]}</span>;
+}
+
+function summarizeImportRows(rows: LoadingItemImportPreviewRow[]) {
+  return {
+    create: rows.filter((row) => row.action === "create").length,
+    update: rows.filter((row) => row.action === "update").length,
+    skip: rows.filter((row) => row.action === "skip").length,
+    errors: rows.filter((row) => row.action === "error").length,
+    targets: rows.filter((row) => row.action === "create" || row.action === "update").length,
+  };
+}
+
+function createImportBatchId(): string {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `import-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
 }

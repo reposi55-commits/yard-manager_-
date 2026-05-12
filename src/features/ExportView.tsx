@@ -15,7 +15,7 @@ const targetLabels: Record<LogTargetType, string> = {
   route: "便",
   task: "タスク",
   routeLink: "便紐付け",
-  loadingItem: "投入荷物",
+  loadingItem: "積み付け情報",
   dialTemplate: "テンプレート",
   templateRun: "テンプレート実行",
 };
@@ -25,6 +25,7 @@ const actionLabels: Record<LogAction, string> = {
   update: "更新",
   delete: "論理削除",
   status_change: "ステータス変更",
+  import: "CSV取込",
 };
 
 export function ExportView({ user, businessDate }: { user: AppUser; businessDate: string }) {
