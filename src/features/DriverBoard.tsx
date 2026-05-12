@@ -61,6 +61,18 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
     }
   }
 
+  async function resetRoute(route: Route) {
+    try {
+      await changeRouteStatus(route, "waiting", user);
+      if (route.type === "sub") {
+        await resetRelatedLoadingItems(route, loadingItems, user);
+      }
+      setSelected(null);
+    } catch (caught) {
+      setError(caught instanceof Error ? caught.message : "便を待機状態に戻せませんでした。");
+    }
+  }
+
   return (
     <Card>
       <div className="section-header">
@@ -146,7 +158,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
             <>
               {selected.status === "waiting" ? <PrimaryButton type="button" onClick={() => changeRouteStatus(selected, "in_progress", user).then(() => setSelected(null))}>作業開始</PrimaryButton> : null}
               {selected.status === "in_progress" ? <PrimaryButton type="button" onClick={() => void completeRoute(selected)}>作業完了</PrimaryButton> : null}
-              {selected.status !== "waiting" ? <SecondaryButton type="button" onClick={() => changeRouteStatus(selected, "waiting", user).then(() => setSelected(null))}>待機に戻す</SecondaryButton> : null}
+              {selected.status !== "waiting" ? <SecondaryButton type="button" onClick={() => void resetRoute(selected)}>待機に戻す</SecondaryButton> : null}
             </>
           }
         >
@@ -266,9 +278,26 @@ async function completeRelatedLoadingItems(route: Route, loadingItems: LoadingIt
   await Promise.all(targets.map((item) => changeLoadingItemStatus(item, "lane_in_completed", user)));
 }
 
+async function resetRelatedLoadingItems(route: Route, loadingItems: LoadingItem[], user: AppUser): Promise<void> {
+  const targets = loadingItems.filter((item) => shouldResetWithSubRoute(item, route.id));
+  await Promise.all(
+    targets.map((item) =>
+      changeLoadingItemStatus(item, "planned", user, {
+        actualLaneInStartAt: null,
+        actualLaneInEndAt: null,
+      }),
+    ),
+  );
+}
+
 function shouldCompleteWithSubRoute(item: LoadingItem, subRouteId: string): boolean {
   if (item.subRouteId !== subRouteId) return false;
   if (item.status === "shortage" || item.status === "cancelled" || item.status === "lane_in_progress" || item.status === "lane_in_completed") return false;
   if (item.actualLaneInStartAt || item.actualLaneInEndAt) return false;
   return true;
+}
+
+function shouldResetWithSubRoute(item: LoadingItem, subRouteId: string): boolean {
+  if (item.subRouteId !== subRouteId) return false;
+  return item.status === "lane_in_progress" || item.status === "lane_in_completed";
 }
