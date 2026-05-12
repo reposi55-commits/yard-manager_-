@@ -10,12 +10,12 @@ type GanttRange = { start: number; end: number; label: string };
 type PositionedRoute = { route: Route; start: number; end: number; level: number };
 
 const FULL_DAY_RANGE: GanttRange = { start: 0, end: BUSINESS_DAY_MINUTES, label: "全日" };
-const HOUR_MINUTES = 60;
+const TICK_MINUTES = 30;
+const GANTT_MINUTE_WIDTH_PX = 2.4;
 const NEAR_WINDOW_MINUTES = 120;
 const ROUTE_BAR_HEIGHT = 58;
 const ROUTE_BAR_GAP = 8;
 const ROUTE_LANE_PADDING = 16;
-const MIN_ROUTE_DURATION_MINUTES = 30;
 
 export function DriverBoard({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [stations, setStations] = useState<Station[]>([]);
@@ -47,7 +47,8 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
   const visibleRange = useMemo(() => buildVisibleRange(viewMode, currentTime), [currentTime, viewMode]);
   const timeTicks = useMemo(() => buildTimeTicks(visibleRange), [visibleRange]);
   const rangeMinutes = visibleRange.end - visibleRange.start;
-  const gridColumnCount = Math.max(1, rangeMinutes / HOUR_MINUTES);
+  const gridColumnCount = Math.max(1, rangeMinutes / TICK_MINUTES);
+  const laneWidthPx = Math.max(720, Math.round(rangeMinutes * GANTT_MINUTE_WIDTH_PX));
 
   async function completeRoute(route: Route) {
     try {
@@ -87,7 +88,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
       </div>
       {error ? <p className="alert">{error}</p> : null}
       {routes.length === 0 ? <EmptyState message="この対象日の便はまだありません。" /> : null}
-      <p className="helper-text">表示範囲: {visibleRange.label} / 目盛りは1時間単位です。</p>
+      <p className="helper-text">表示範囲: {visibleRange.label} / 目盛りは30分単位です。</p>
       <div className="gantt-legend">
         <span className="legend-waiting">{routeStatusLabels.waiting}</span>
         <span className="legend-in-progress">{routeStatusLabels.in_progress}</span>
@@ -96,7 +97,7 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
         {currentTime ? <span className="legend-current">現在 {currentTime.label}</span> : null}
       </div>
       <div className="gantt-wrap">
-        <div className="gantt-table" style={{ "--gantt-grid-columns": gridColumnCount } as CSSProperties}>
+        <div className="gantt-table" style={{ "--gantt-grid-columns": gridColumnCount, "--gantt-lane-width": `${laneWidthPx}px` } as CSSProperties}>
           <div className="gantt-time">
             <div className="station-label-head">ステーション</div>
             <div className="time-axis">
@@ -212,8 +213,8 @@ function getCurrentTimeMarker(now: Date, businessDate: string): { label: string;
 function buildVisibleRange(viewMode: DriverViewMode, currentTime: { offset: number } | null): GanttRange {
   if (viewMode !== "near" || !currentTime) return FULL_DAY_RANGE;
 
-  const start = Math.max(0, currentTime.offset - NEAR_WINDOW_MINUTES);
-  const end = Math.min(BUSINESS_DAY_MINUTES, currentTime.offset + NEAR_WINDOW_MINUTES);
+  const start = Math.max(0, Math.floor((currentTime.offset - NEAR_WINDOW_MINUTES) / TICK_MINUTES) * TICK_MINUTES);
+  const end = Math.min(BUSINESS_DAY_MINUTES, Math.ceil((currentTime.offset + NEAR_WINDOW_MINUTES) / TICK_MINUTES) * TICK_MINUTES);
   return {
     start,
     end,
@@ -222,9 +223,9 @@ function buildVisibleRange(viewMode: DriverViewMode, currentTime: { offset: numb
 }
 
 function buildTimeTicks(range: GanttRange): number[] {
-  const firstTick = Math.ceil(range.start / HOUR_MINUTES) * HOUR_MINUTES;
+  const firstTick = Math.ceil(range.start / TICK_MINUTES) * TICK_MINUTES;
   const ticks: number[] = [];
-  for (let tick = firstTick; tick <= range.end; tick += HOUR_MINUTES) {
+  for (let tick = firstTick; tick <= range.end; tick += TICK_MINUTES) {
     ticks.push(tick);
   }
   if (!ticks.includes(range.start)) ticks.unshift(range.start);
@@ -237,7 +238,7 @@ function layoutStationRoutes(routes: Route[], range: GanttRange): PositionedRout
   return routes
     .map((route) => {
       const plannedStart = Math.max(0, route.plannedStartOffsetMin);
-      const plannedEnd = Math.min(BUSINESS_DAY_MINUTES, Math.max(route.plannedEndOffsetMin, plannedStart + MIN_ROUTE_DURATION_MINUTES));
+      const plannedEnd = Math.min(BUSINESS_DAY_MINUTES, Math.max(route.plannedEndOffsetMin, plannedStart));
       return { route, plannedStart, plannedEnd };
     })
     .filter((item) => item.plannedStart < range.end && item.plannedEnd > range.start)

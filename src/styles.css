@@ -1214,7 +1214,7 @@ th {
 }
 
 .gantt-table {
-  min-width: 1840px;
+  min-width: calc(180px + var(--gantt-lane-width, 1660px));
 }
 
 .driver-view-switch {
@@ -1288,7 +1288,7 @@ th {
 .gantt-time,
 .gantt-row {
   display: grid;
-  grid-template-columns: 180px minmax(1660px, 1fr);
+  grid-template-columns: 180px minmax(var(--gantt-lane-width, 1660px), 1fr);
 }
 
 .gantt-time {
@@ -1400,7 +1400,6 @@ th {
 
 .route-bar {
   position: absolute;
-  min-width: 88px;
   height: 58px;
   border-radius: 8px;
   border: 1px solid rgba(22, 32, 51, 0.12);
@@ -1424,11 +1423,11 @@ th {
 
 .route-bar span {
   font-weight: 800;
-  font-size: 1rem;
+  font-size: 0.95rem;
 }
 
 .route-bar small {
-  padding-right: 56px;
+  padding-right: 42px;
   font-size: 0.86rem;
   font-weight: 800;
 }
@@ -1437,7 +1436,7 @@ th {
   position: absolute;
   right: 6px;
   bottom: 5px;
-  max-width: 62px;
+  max-width: calc(100% - 12px);
   min-height: 24px;
   display: inline-flex;
   align-items: center;
@@ -1455,7 +1454,7 @@ th {
   position: absolute;
   top: 5px;
   right: 6px;
-  max-width: 58px;
+  max-width: calc(100% - 12px);
   padding: 1px 5px 2px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.18);
