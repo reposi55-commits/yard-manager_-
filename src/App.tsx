@@ -7,6 +7,7 @@ import { ExportView } from "./features/ExportView";
 import { FieldTaskBoard } from "./features/FieldTaskBoard";
 import { HistoryDataView } from "./features/HistoryDataView";
 import { ImportPreviewView } from "./features/ImportPreviewView";
+import { LoadingItemManagement } from "./features/LoadingItemManagement";
 import { MasterManagement } from "./features/MasterManagement";
 import { OperationLogView } from "./features/OperationLogView";
 import { PerformanceAnalysisView } from "./features/PerformanceAnalysisView";
@@ -40,6 +41,7 @@ export default function App() {
         {activeTab === "driver" ? <DriverBoard user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "exports" ? <ExportView user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "imports" ? <ImportPreviewView user={appUser} businessDate={businessDate} /> : null}
+        {activeTab === "loadingItems" ? <LoadingItemManagement user={appUser} businessDate={businessDate} /> : null}
         {activeTab === "stations" ? <MasterManagement kind="stations" user={appUser} /> : null}
         {activeTab === "lanes" ? <MasterManagement kind="lanes" user={appUser} /> : null}
         {activeTab === "workers" ? <MasterManagement kind="workers" user={appUser} /> : null}

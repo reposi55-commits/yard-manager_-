@@ -3,7 +3,7 @@ import type { PropsWithChildren } from "react";
 import { DateSelector, SecondaryButton } from "./ui";
 import type { AppUser } from "../types";
 
-export type AdminTab = "dashboard" | "analysis" | "history" | "templates" | "routes" | "tasks" | "links" | "driver" | "exports" | "imports" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
+export type AdminTab = "dashboard" | "analysis" | "history" | "templates" | "routes" | "tasks" | "links" | "driver" | "exports" | "imports" | "loadingItems" | "stations" | "lanes" | "workers" | "users" | "field" | "logs";
 type AdminMenuGroupId = "daily" | "masters" | "analysis";
 
 const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
@@ -17,6 +17,7 @@ const adminItems: Array<{ id: AdminTab; label: string; icon: typeof Truck }> = [
   { id: "driver", label: "ドライバー", icon: CalendarDays },
   { id: "exports", label: "CSV出力", icon: Download },
   { id: "imports", label: "CSV取込", icon: Upload },
+  { id: "loadingItems", label: "積み付け情報", icon: ClipboardList },
   { id: "stations", label: "ステーション", icon: MapPinned },
   { id: "lanes", label: "レーン", icon: RouteIcon },
   { id: "workers", label: "作業員", icon: Users },
@@ -36,7 +37,7 @@ const adminMenuGroups: Array<{ id: AdminMenuGroupId; label: string; description:
     id: "masters",
     label: "マスタ管理メニュー",
     description: "週次・月次の設定と一括登録",
-    tabs: ["links", "templates", "imports", "stations", "lanes", "workers", "users"],
+    tabs: ["links", "templates", "imports", "loadingItems", "stations", "lanes", "workers", "users"],
   },
   {
     id: "analysis",

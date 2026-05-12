@@ -4,7 +4,6 @@ import { createEntity, softDeleteEntity, subscribeDaily, updateEntity } from "..
 import type { AppUser, Route, RouteStatus, RouteType, Station } from "../types";
 import { formatTimestamp, labelToOffsetMin } from "../utils/date";
 import { routeStatusLabels } from "../utils/status";
-import { LoadingItemManagement } from "./LoadingItemManagement";
 import { useMasterOptions } from "./MasterManagement";
 
 const routeDefaults = {
@@ -141,7 +140,6 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
   }
 
   return (
-    <>
     <Card>
       <div className="section-header">
         <div>
@@ -263,8 +261,6 @@ export function RouteManagement({ user, businessDate }: { user: AppUser; busines
         </Modal>
       ) : null}
     </Card>
-    <LoadingItemManagement user={user} businessDate={businessDate} />
-    </>
   );
 }
 

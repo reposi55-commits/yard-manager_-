@@ -1214,7 +1214,37 @@ th {
 }
 
 .gantt-table {
-  min-width: 980px;
+  min-width: 1840px;
+}
+
+.driver-view-switch {
+  display: inline-flex;
+  gap: 6px;
+  padding: 4px;
+  border: 1px solid #c8d4dc;
+  border-radius: 8px;
+  background: #f8fafb;
+}
+
+.driver-view-switch button {
+  min-height: 40px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #25364a;
+  cursor: pointer;
+  font-weight: 800;
+  padding: 8px 14px;
+}
+
+.driver-view-switch button.active {
+  background: #0f766e;
+  color: #ffffff;
+}
+
+.driver-view-switch button:disabled {
+  color: #91a0ad;
+  cursor: not-allowed;
 }
 
 .gantt-legend {
@@ -1258,7 +1288,7 @@ th {
 .gantt-time,
 .gantt-row {
   display: grid;
-  grid-template-columns: 180px minmax(760px, 1fr);
+  grid-template-columns: 180px minmax(1660px, 1fr);
 }
 
 .gantt-time {
@@ -1276,6 +1306,10 @@ th {
   font-weight: 800;
 }
 
+.station-label {
+  min-height: var(--gantt-lane-height, 74px);
+}
+
 .station-label small {
   display: block;
   margin-top: 2px;
@@ -1288,10 +1322,10 @@ th {
   position: relative;
   border: 1px solid #dce4ea;
   border-left: 0;
-  min-height: 70px;
+  min-height: var(--gantt-lane-height, 74px);
   background-color: #ffffff;
   background-image: linear-gradient(to right, rgba(80, 102, 123, 0.14) 1px, transparent 1px);
-  background-size: calc(100% / 12) 100%;
+  background-size: calc(100% / var(--gantt-grid-columns, 24)) 100%;
 }
 
 .time-axis span {
@@ -1366,17 +1400,16 @@ th {
 
 .route-bar {
   position: absolute;
-  top: 8px;
   min-width: 88px;
-  height: 54px;
+  height: 58px;
   border-radius: 8px;
   border: 1px solid rgba(22, 32, 51, 0.12);
-  padding: 5px 8px 6px;
+  padding: 7px 8px 6px;
   overflow: hidden;
   color: #ffffff;
   display: grid;
   align-content: start;
-  gap: 1px;
+  gap: 2px;
   text-align: left;
 }
 
@@ -1390,29 +1423,43 @@ th {
 }
 
 .route-bar span {
-  padding-right: 58px;
   font-weight: 800;
+  font-size: 1rem;
 }
 
 .route-bar small {
-  font-size: 0.76rem;
+  padding-right: 56px;
+  font-size: 0.86rem;
+  font-weight: 800;
 }
 
 .route-bar em {
   position: absolute;
-  top: 5px;
   right: 6px;
-  max-width: 58px;
-  padding: 1px 5px;
+  bottom: 5px;
+  max-width: 62px;
+  min-height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 2px 6px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.24);
-  font-size: 0.7rem;
+  background: rgba(255, 255, 255, 0.2);
+  border: 1px solid rgba(255, 255, 255, 0.28);
+  font-size: 0.78rem;
   font-style: normal;
   font-weight: 800;
 }
 
 .route-bar strong {
+  position: absolute;
+  top: 5px;
+  right: 6px;
+  max-width: 58px;
+  padding: 1px 5px 2px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   font-size: 0.72rem;
   font-weight: 800;
 }
