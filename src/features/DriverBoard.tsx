@@ -45,51 +45,53 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
         {currentTime ? <span className="legend-current">現在 {currentTime.label}</span> : null}
       </div>
       <div className="gantt-wrap">
-        <div className="gantt-time">
-          <div className="station-label-head">ステーション</div>
-          <div className="time-axis">
-            {timeTicks.map((tick) => <span key={tick} style={{ left: `${(tick / BUSINESS_DAY_MINUTES) * 100}%` }}>{offsetMinToLabel(tick)}</span>)}
-            {currentTime ? <CurrentTimeMarker currentTime={currentTime} /> : null}
+        <div className="gantt-table">
+          <div className="gantt-time">
+            <div className="station-label-head">ステーション</div>
+            <div className="time-axis">
+              {timeTicks.map((tick) => <span key={tick} style={{ left: `${(tick / BUSINESS_DAY_MINUTES) * 100}%` }}>{offsetMinToLabel(tick)}</span>)}
+              {currentTime ? <CurrentTimeMarker currentTime={currentTime} labelOnly /> : null}
+            </div>
           </div>
+          {groupedStations.map(([area, group]) => (
+            <section key={area} className="gantt-area">
+              <h3>{area}</h3>
+              {group.map((station) => {
+                const stationRoutes = routes.filter((route) => route.stationId === station.id);
+                return (
+                  <div className="gantt-row" key={station.id}>
+                    <div className="station-label">
+                      {station.name}
+                      {!station.active ? <small>無効</small> : null}
+                    </div>
+                    <div className="gantt-lane">
+                      {currentTime ? <CurrentTimeMarker currentTime={currentTime} compact /> : null}
+                      {stationRoutes.map((route) => {
+                        const start = Math.max(0, route.plannedStartOffsetMin);
+                        const end = Math.min(BUSINESS_DAY_MINUTES, Math.max(route.plannedEndOffsetMin, start + 30));
+                        return (
+                          <button
+                            key={route.id}
+                            type="button"
+                            className={`route-bar route-${route.status} ${route.actualStartAt ? "route-has-start" : ""} ${route.actualEndAt ? "route-has-end" : ""}`}
+                            style={{ left: `${(start / BUSINESS_DAY_MINUTES) * 100}%`, width: `${((end - start) / BUSINESS_DAY_MINUTES) * 100}%` }}
+                            title={`${route.routeName} / ${route.flightNumber} / ${routeStatusLabels[route.status]}`}
+                            onClick={() => setSelected(route)}
+                          >
+                            <span>{route.routeName}</span>
+                            <small>{route.flightNumber}</small>
+                            <em>{routeStatusLabels[route.status]}</em>
+                            {route.actualStartAt ? <strong>{route.actualEndAt ? "実績完了" : "実績開始"}</strong> : null}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </section>
+          ))}
         </div>
-        {groupedStations.map(([area, group]) => (
-          <section key={area} className="gantt-area">
-            <h3>{area}</h3>
-            {group.map((station) => {
-              const stationRoutes = routes.filter((route) => route.stationId === station.id);
-              return (
-                <div className="gantt-row" key={station.id}>
-                  <div className="station-label">
-                    {station.name}
-                    {!station.active ? <small>無効</small> : null}
-                  </div>
-                  <div className="gantt-lane">
-                    {currentTime ? <CurrentTimeMarker currentTime={currentTime} compact /> : null}
-                    {stationRoutes.map((route) => {
-                      const start = Math.max(0, route.plannedStartOffsetMin);
-                      const end = Math.min(BUSINESS_DAY_MINUTES, Math.max(route.plannedEndOffsetMin, start + 30));
-                      return (
-                        <button
-                          key={route.id}
-                          type="button"
-                          className={`route-bar route-${route.status} ${route.actualStartAt ? "route-has-start" : ""} ${route.actualEndAt ? "route-has-end" : ""}`}
-                          style={{ left: `${(start / BUSINESS_DAY_MINUTES) * 100}%`, width: `${((end - start) / BUSINESS_DAY_MINUTES) * 100}%` }}
-                          title={`${route.routeName} / ${route.flightNumber} / ${routeStatusLabels[route.status]}`}
-                          onClick={() => setSelected(route)}
-                        >
-                          <span>{route.routeName}</span>
-                          <small>{route.flightNumber}</small>
-                          <em>{routeStatusLabels[route.status]}</em>
-                          {route.actualStartAt ? <strong>{route.actualEndAt ? "実績完了" : "実績開始"}</strong> : null}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
-              );
-            })}
-          </section>
-        ))}
       </div>
       {selected ? (
         <Modal
@@ -121,17 +123,19 @@ export function DriverBoard({ user, businessDate }: { user: AppUser; businessDat
 function CurrentTimeMarker({
   currentTime,
   compact = false,
+  labelOnly = false,
 }: {
   currentTime: { label: string; percent: number };
   compact?: boolean;
+  labelOnly?: boolean;
 }) {
   return (
     <div
-      className={`current-time-marker ${compact ? "compact" : ""}`}
+      className={`current-time-marker ${compact ? "compact" : ""} ${labelOnly ? "label-only" : ""}`}
       style={{ left: `${currentTime.percent}%` }}
       aria-label={`現在時刻 ${currentTime.label}`}
     >
-      {!compact ? <span>{currentTime.label}</span> : null}
+      {!compact || labelOnly ? <span>{currentTime.label}</span> : null}
     </div>
   );
 }

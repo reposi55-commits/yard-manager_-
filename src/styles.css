@@ -1189,8 +1189,15 @@ th {
 }
 
 .gantt-wrap {
+  width: 100%;
+  max-height: calc(100vh - 220px);
+  min-height: 320px;
+  overflow: auto;
+  position: relative;
+}
+
+.gantt-table {
   min-width: 980px;
-  overflow-x: auto;
 }
 
 .gantt-legend {
@@ -1237,6 +1244,13 @@ th {
   grid-template-columns: 180px minmax(760px, 1fr);
 }
 
+.gantt-time {
+  position: sticky;
+  top: 0;
+  z-index: 12;
+  box-shadow: 0 8px 14px rgba(22, 32, 51, 0.08);
+}
+
 .station-label-head,
 .station-label {
   padding: 12px;
@@ -1258,6 +1272,7 @@ th {
   border: 1px solid #dce4ea;
   border-left: 0;
   min-height: 70px;
+  background-color: #ffffff;
   background-image: linear-gradient(to right, rgba(80, 102, 123, 0.14) 1px, transparent 1px);
   background-size: calc(100% / 12) 100%;
 }
@@ -1282,16 +1297,7 @@ th {
 }
 
 .current-time-marker::before {
-  content: "";
-  position: absolute;
-  top: 0;
-  left: 50%;
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  transform: translate(-50%, -50%);
-  background: #d92d20;
-  box-shadow: 0 0 0 3px rgba(217, 45, 32, 0.16);
+  display: none;
 }
 
 .current-time-marker span {
@@ -1318,6 +1324,22 @@ th {
 
 .current-time-marker.compact::before {
   top: 50%;
+}
+
+.current-time-marker.label-only {
+  width: 0;
+  background: transparent;
+}
+
+.current-time-marker.label-only::before {
+  display: none;
+}
+
+.current-time-marker.label-only span {
+  top: auto;
+  bottom: 8px;
+  left: 0;
+  transform: translateX(-50%);
 }
 
 .gantt-area h3 {
@@ -1812,5 +1834,9 @@ th {
 
   .modal-footer .btn {
     width: 100%;
+  }
+
+  .gantt-wrap {
+    max-height: calc(100vh - 150px);
   }
 }
