@@ -21,6 +21,8 @@ const taskDefaults = {
   status: "pending" as TaskStatus,
 };
 
+const optionCollator = new Intl.Collator("ja", { numeric: true, sensitivity: "base" });
+
 export function TaskManagement({ user, businessDate }: { user: AppUser; businessDate: string }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [routes, setRoutes] = useState<Route[]>([]);
@@ -32,13 +34,16 @@ export function TaskManagement({ user, businessDate }: { user: AppUser; business
   const [workerFilter, setWorkerFilter] = useState("all");
   const [statusFilter, setStatusFilter] = useState<"all" | TaskStatus>("all");
   const { lanes, workers } = useMasterOptions(user);
-  const mainRoutes = useMemo(() => routes.filter((route) => route.type === "main"), [routes]);
+  const mainRoutes = useMemo(
+    () => routes.filter((route) => route.type === "main").sort(compareMainRouteOptions),
+    [routes],
+  );
   const selectableWorkers = useMemo(
     () => workers.filter((worker) => worker.active || worker.id === draft.workerId),
     [workers, draft.workerId],
   );
   const selectableLanes = useMemo(
-    () => lanes.filter((lane) => lane.active || lane.id === draft.laneId),
+    () => lanes.filter((lane) => lane.active || lane.id === draft.laneId).sort(compareLaneOptions),
     [lanes, draft.laneId],
   );
   const filteredTasks = useMemo(() => {
@@ -357,4 +362,12 @@ function buildTaskWarnings(
 
 function rangesOverlap(startA: number, endA: number, startB: number, endB: number): boolean {
   return startA < endB && startB < endA;
+}
+
+function compareMainRouteOptions(a: Route, b: Route): number {
+  return optionCollator.compare(a.routeName, b.routeName) || optionCollator.compare(a.flightNumber, b.flightNumber);
+}
+
+function compareLaneOptions(a: Lane, b: Lane): number {
+  return Number(b.active) - Number(a.active) || optionCollator.compare(a.area, b.area) || optionCollator.compare(a.name, b.name);
 }
