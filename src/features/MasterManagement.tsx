@@ -7,7 +7,7 @@ import { Card, DangerButton, EmptyState, Field, FormCheckPanel, Modal, PrimaryBu
 type MasterKind = "stations" | "lanes" | "workers";
 
 const emptyStation = { name: "", area: "", sortOrder: 0, active: true };
-const emptyLane = { name: "", area: "", adjacentLaneIds: "", sortOrder: 0, active: true };
+const emptyLane = { name: "", area: "", adjacentLaneIds: [] as string[], sortOrder: 0, active: true };
 const emptyWorker = { name: "", displayName: "", active: true };
 
 function confirmDelete(label: string): boolean {
@@ -110,13 +110,17 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
   const [editing, setEditing] = useState<Lane | null>(null);
   const issues = useMemo(() => buildLaneIssues(draft), [draft]);
   const warnings = useMemo(() => buildMasterNameWarnings(items, editing?.id, draft.name, "同じ名前のレーンが既にあります。"), [draft.name, editing?.id, items]);
+  const selectableAdjacentLanes = useMemo(
+    () => items.filter((item) => item.id !== editing?.id && (item.active || draft.adjacentLaneIds.includes(item.id))),
+    [draft.adjacentLaneIds, editing?.id, items],
+  );
 
   async function save(): Promise<boolean> {
     const payload = {
       ...draft,
       name: draft.name.trim(),
       area: draft.area.trim(),
-      adjacentLaneIds: draft.adjacentLaneIds.split(",").map((id) => id.trim()).filter(Boolean),
+      adjacentLaneIds: draft.adjacentLaneIds.filter((id, index, ids) => id !== editing?.id && ids.indexOf(id) === index),
     };
     if (issues.length > 0) {
       window.alert(issues[0]);
@@ -142,7 +146,29 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
       <MasterForm issues={issues} warnings={warnings} onSave={save} onCancel={() => { setEditing(null); setDraft(emptyLane); }} editing={Boolean(editing)}>
         <Field label="名称"><input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} /></Field>
         <Field label="エリア"><input value={draft.area} onChange={(e) => setDraft({ ...draft, area: e.target.value })} /></Field>
-        <Field label="隣接レーンID"><input value={draft.adjacentLaneIds} onChange={(e) => setDraft({ ...draft, adjacentLaneIds: e.target.value })} placeholder="カンマ区切り" /></Field>
+        <Field label="隣接レーン">
+          <div className="choice-list">
+            {selectableAdjacentLanes.length === 0 ? <p className="helper-text">選択できる既存レーンがありません。</p> : null}
+            {selectableAdjacentLanes.map((lane) => {
+              const checked = draft.adjacentLaneIds.includes(lane.id);
+              return (
+                <label className="check-row choice-item" key={lane.id}>
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={(event) => {
+                      const nextIds = event.target.checked
+                        ? [...draft.adjacentLaneIds, lane.id]
+                        : draft.adjacentLaneIds.filter((id) => id !== lane.id);
+                      setDraft({ ...draft, adjacentLaneIds: nextIds });
+                    }}
+                  />
+                  <span>{formatLaneLabel(lane)}</span>
+                </label>
+              );
+            })}
+          </div>
+        </Field>
         <Field label="並び順"><input type="number" value={draft.sortOrder} onChange={(e) => setDraft({ ...draft, sortOrder: Number(e.target.value) })} /></Field>
         <label className="check-row"><input type="checkbox" checked={draft.active} onChange={(e) => setDraft({ ...draft, active: e.target.checked })} /> 有効</label>
       </MasterForm>
@@ -152,9 +178,9 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
           <tbody>
             {items.map((item) => (
               <tr key={item.id}>
-                <td>{item.name}</td><td>{item.area}</td><td>{item.adjacentLaneIds.join(", ") || "-"}</td><td>{item.sortOrder}</td><td>{item.active ? "有効" : "無効"}</td>
+                <td>{item.name}</td><td>{item.area}</td><td>{formatAdjacentLaneNames(item.adjacentLaneIds, items)}</td><td>{item.sortOrder}</td><td>{item.active ? "有効" : "無効"}</td>
                 <td className="table-actions">
-                  <SecondaryButton type="button" onClick={() => { setEditing(item); setDraft({ name: item.name, area: item.area, adjacentLaneIds: item.adjacentLaneIds.join(", "), sortOrder: item.sortOrder, active: item.active }); }}>編集</SecondaryButton>
+                  <SecondaryButton type="button" onClick={() => { setEditing(item); setDraft({ name: item.name, area: item.area, adjacentLaneIds: item.adjacentLaneIds, sortOrder: item.sortOrder, active: item.active }); }}>編集</SecondaryButton>
                   <DangerButton type="button" onClick={() => { if (confirmDelete(item.name)) void softDeleteEntity("lanes", item, user); }}>削除</DangerButton>
                 </td>
               </tr>
@@ -292,6 +318,18 @@ function buildLaneIssues(draft: typeof emptyLane): string[] {
   if (!draft.area.trim()) issues.push("エリアを入力してください。");
   if (!Number.isFinite(draft.sortOrder)) issues.push("並び順は数値で入力してください。");
   return issues;
+}
+
+function formatLaneLabel(lane: Lane): string {
+  return `${lane.name}${lane.area ? ` / ${lane.area}` : ""}${lane.active ? "" : "（無効）"}`;
+}
+
+function formatAdjacentLaneNames(adjacentLaneIds: string[], lanes: Lane[]): string {
+  const labels = adjacentLaneIds.map((id) => {
+    const lane = lanes.find((item) => item.id === id);
+    return lane ? formatLaneLabel(lane) : id;
+  });
+  return labels.length > 0 ? labels.join(", ") : "-";
 }
 
 function buildWorkerIssues(draft: typeof emptyWorker): string[] {
