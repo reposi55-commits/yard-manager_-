@@ -76,7 +76,7 @@ export function FieldTaskBoard({ user, businessDate }: { user: AppUser; business
         const qualityInstructions = uniqueText(activeLoadingItems.map((item) => item.qualityInstruction));
         const safetyInstructions = uniqueText(activeLoadingItems.map((item) => item.safetyInstruction));
         const loadingBlocked = relatedLoadingItems.length === 0 || shortageItems.length > 0 || incompleteLoadingItems.length > 0;
-        const laneSafetyReasons = buildTaskLaneSafetyBlockedReasons(task, loadingItems, lanes);
+        const laneSafetyReasons = buildTaskLaneSafetyBlockedReasons(task, loadingItems, lanes, routes);
         const blockedReasons = [
           ...buildBlockedReasons(routeBlocked, relatedLoadingItems, shortageItems, incompleteLoadingItems),
           ...laneSafetyReasons,

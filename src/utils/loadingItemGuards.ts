@@ -1,4 +1,4 @@
-import type { Lane, LoadingItem, Task } from "../types";
+import type { Lane, LoadingItem, Route, Task } from "../types";
 
 export const loadingItemStatusLabels: Record<LoadingItem["status"], string> = {
   planned: "登録済み",
@@ -42,9 +42,11 @@ export function buildBlockedReasons(
   return reasons;
 }
 
-export function buildTaskLaneSafetyBlockedReasons(task: Pick<Task, "laneId">, loadingItems: LoadingItem[], lanes: Lane[]): string[] {
+export function buildTaskLaneSafetyBlockedReasons(task: Pick<Task, "laneId">, loadingItems: LoadingItem[], lanes: Lane[], routes: Route[] = []): string[] {
   const targetLaneIds = getRelatedSafetyLaneIds(task.laneId, lanes);
   const inProgressItems = loadingItems.filter((item) => item.status === "lane_in_progress" && targetLaneIds.has(item.laneId));
+  const activeLoadingItems = loadingItems.filter((item) => item.status !== "cancelled");
+  const inProgressMainRoutes = routes.filter((route) => route.type === "main" && route.status === "in_progress");
   const reasons = new Set<string>();
 
   inProgressItems.forEach((item) => {
@@ -54,6 +56,23 @@ export function buildTaskLaneSafetyBlockedReasons(task: Pick<Task, "laneId">, lo
     } else {
       reasons.add(`開始不可：隣接 ${laneName}でリフト投入中です`);
     }
+  });
+
+  inProgressMainRoutes.forEach((route) => {
+    const routeLaneIds = new Set(
+      activeLoadingItems
+        .filter((item) => item.mainRouteId === route.id && targetLaneIds.has(item.laneId))
+        .map((item) => item.laneId),
+    );
+    routeLaneIds.forEach((laneId) => {
+      const laneName = formatLaneName(activeLoadingItems.find((item) => item.laneId === laneId)?.laneName || lanes.find((lane) => lane.id === laneId)?.name || laneId);
+      const routeLabel = [route.routeName, route.flightNumber].filter(Boolean).join(" ");
+      if (laneId === task.laneId) {
+        reasons.add(`開始不可：${laneName}でメイン便 ${routeLabel} が作業中です`);
+      } else {
+        reasons.add(`開始不可：隣接 ${laneName}でメイン便 ${routeLabel} が作業中です`);
+      }
+    });
   });
 
   return [...reasons];
