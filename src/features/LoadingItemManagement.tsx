@@ -15,6 +15,8 @@ import {
 import { downloadCsv } from "../utils/csv";
 import { useMasterOptions } from "./MasterManagement";
 
+type RouteLinkCandidate = Pick<LoadingItem, "siteId" | "businessDate" | "subRouteId" | "mainRouteId">;
+
 const loadingItemStatusLabels: Record<LoadingItemStatus, string> = {
   planned: "登録済み",
   sub_arrived: "サブ便到着",
@@ -196,6 +198,7 @@ export function LoadingItemManagement({
       } else {
         await createLoadingItem(payload, user);
       }
+      await ensureRouteLinkForLoadingItem(payload, routeLinks, routes, user);
       closeForm();
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : "積み付け情報の保存に失敗しました。");
@@ -245,6 +248,8 @@ export function LoadingItemManagement({
     setError("");
     setSuccess("");
     try {
+      const routeLinkKeys = new Set(routeLinks.map((link) => buildRouteLinkKey(link.subRouteId, link.mainRouteId)));
+      let createdRouteLinkCount = 0;
       for (const row of targetRows) {
         if (!row.payload) continue;
         const payload = withImportBatch(row.payload, importBatchId);
@@ -253,8 +258,10 @@ export function LoadingItemManagement({
         } else if (row.action === "update" && row.existingItem) {
           await updateEntity("loadingItems", row.existingItem, payload, user, "import");
         }
+        const createdRouteLink = await ensureRouteLinkForLoadingItem(payload, routeLinks, routes, user, routeLinkKeys);
+        if (createdRouteLink) createdRouteLinkCount += 1;
       }
-      setSuccess(`積み付け情報を${targetRows.length}件取り込みました。`);
+      setSuccess(`積み付け情報を${targetRows.length}件取り込みました。便紐付けを${createdRouteLinkCount}件自動作成しました。`);
       setImportRows([]);
       setImportFileName("");
     } catch (caught) {
@@ -584,6 +591,42 @@ function summarizeImportRows(rows: LoadingItemImportPreviewRow[]) {
     errors: rows.filter((row) => row.action === "error").length,
     targets: rows.filter((row) => row.action === "create" || row.action === "update").length,
   };
+}
+
+async function ensureRouteLinkForLoadingItem(
+  item: RouteLinkCandidate,
+  routeLinks: RouteLink[],
+  routes: Route[],
+  user: AppUser,
+  knownKeys = new Set(routeLinks.map((link) => buildRouteLinkKey(link.subRouteId, link.mainRouteId))),
+): Promise<boolean> {
+  const key = buildRouteLinkKey(item.subRouteId, item.mainRouteId);
+  if (knownKeys.has(key)) return false;
+
+  const subRoute = routes.find((route) => route.id === item.subRouteId && route.type === "sub");
+  const mainRoute = routes.find((route) => route.id === item.mainRouteId && route.type === "main");
+  if (!subRoute || !mainRoute) return false;
+
+  await createEntity(
+    "routeLinks",
+    {
+      siteId: item.siteId,
+      businessDate: item.businessDate,
+      subRouteId: subRoute.id,
+      subRouteName: subRoute.routeName,
+      subFlightNumber: subRoute.flightNumber,
+      mainRouteId: mainRoute.id,
+      mainRouteName: mainRoute.routeName,
+      mainFlightNumber: mainRoute.flightNumber,
+    },
+    user,
+  );
+  knownKeys.add(key);
+  return true;
+}
+
+function buildRouteLinkKey(subRouteId: string, mainRouteId: string): string {
+  return `${subRouteId}::${mainRouteId}`;
 }
 
 function createImportBatchId(): string {

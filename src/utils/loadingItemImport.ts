@@ -179,7 +179,7 @@ export function buildLoadingItemImportPreviewRows(
       const hasRouteLink = context.routeLinks.some(
         (link) => link.subRouteId === subRouteResult.route?.id && link.mainRouteId === mainRouteResult.route?.id,
       );
-      if (!hasRouteLink) warnings.push("routeLinksに該当するサブ便・メイン便の紐付けがありません。");
+      if (!hasRouteLink) warnings.push("routeLinksに該当するサブ便・メイン便の紐付けがありません。取込実行時に自動作成します。");
     }
 
     const existingItem = externalKey ? existingByExternalKey.get(externalKey) : undefined;
