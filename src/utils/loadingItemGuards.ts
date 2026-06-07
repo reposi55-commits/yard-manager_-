@@ -43,8 +43,7 @@ export function buildBlockedReasons(
 }
 
 export function buildTaskLaneSafetyBlockedReasons(task: Pick<Task, "laneId">, loadingItems: LoadingItem[], lanes: Lane[]): string[] {
-  const targetLane = lanes.find((lane) => lane.id === task.laneId);
-  const targetLaneIds = new Set([task.laneId, ...(targetLane?.adjacentLaneIds || [])]);
+  const targetLaneIds = getRelatedSafetyLaneIds(task.laneId, lanes);
   const inProgressItems = loadingItems.filter((item) => item.status === "lane_in_progress" && targetLaneIds.has(item.laneId));
   const reasons = new Set<string>();
 
@@ -61,8 +60,7 @@ export function buildTaskLaneSafetyBlockedReasons(task: Pick<Task, "laneId">, lo
 }
 
 export function buildLaneWorkSafetyIssue(laneId: string, lanes: Lane[], tasks: Task[]): string {
-  const targetLane = lanes.find((lane) => lane.id === laneId);
-  const targetLaneIds = new Set([laneId, ...(targetLane?.adjacentLaneIds || [])]);
+  const targetLaneIds = getRelatedSafetyLaneIds(laneId, lanes);
   const inProgressTask = tasks.find((task) => task.status === "in_progress" && targetLaneIds.has(task.laneId));
   if (!inProgressTask) return "";
 
@@ -94,4 +92,17 @@ export function getLoadingItemProgressLabel(item: LoadingItem): string {
 export function formatLaneName(name: string): string {
   if (!name) return "対象レーン";
   return name.endsWith("レーン") ? name : `${name}レーン`;
+}
+
+function getRelatedSafetyLaneIds(laneId: string, lanes: Lane[]): Set<string> {
+  const targetLane = lanes.find((lane) => lane.id === laneId);
+  const relatedIds = new Set([laneId, ...(targetLane?.adjacentLaneIds || [])]);
+
+  lanes.forEach((lane) => {
+    if (lane.adjacentLaneIds.includes(laneId)) {
+      relatedIds.add(lane.id);
+    }
+  });
+
+  return relatedIds;
 }
