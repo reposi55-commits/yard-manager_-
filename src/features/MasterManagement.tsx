@@ -9,6 +9,7 @@ type MasterKind = "stations" | "lanes" | "workers";
 const emptyStation = { name: "", area: "", sortOrder: 0, active: true };
 const emptyLane = { name: "", area: "", adjacentLaneIds: [] as string[], sortOrder: 0, active: true };
 const emptyWorker = { name: "", displayName: "", active: true };
+const masterOptionCollator = new Intl.Collator("ja", { numeric: true, sensitivity: "base" });
 
 function confirmDelete(label: string): boolean {
   return window.confirm(`${label} を削除しますか？`);
@@ -110,9 +111,10 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
   const [editing, setEditing] = useState<Lane | null>(null);
   const issues = useMemo(() => buildLaneIssues(draft), [draft]);
   const warnings = useMemo(() => buildMasterNameWarnings(items, editing?.id, draft.name, "同じ名前のレーンが既にあります。"), [draft.name, editing?.id, items]);
+  const sortedLaneItems = useMemo(() => [...items].sort(compareLaneOptions), [items]);
   const selectableAdjacentLanes = useMemo(
-    () => items.filter((item) => item.id !== editing?.id && (item.active || draft.adjacentLaneIds.includes(item.id))),
-    [draft.adjacentLaneIds, editing?.id, items],
+    () => sortedLaneItems.filter((item) => item.id !== editing?.id && (item.active || draft.adjacentLaneIds.includes(item.id))),
+    [draft.adjacentLaneIds, editing?.id, sortedLaneItems],
   );
 
   async function save(): Promise<boolean> {
@@ -176,7 +178,7 @@ function LaneEditor({ user, items }: { user: AppUser; items: Lane[] }) {
         <table>
           <thead><tr><th>名称</th><th>エリア</th><th>隣接レーン</th><th>並び順</th><th>状態</th><th>操作</th></tr></thead>
           <tbody>
-            {items.map((item) => (
+            {sortedLaneItems.map((item) => (
               <tr key={item.id}>
                 <td>{item.name}</td><td>{item.area}</td><td>{formatAdjacentLaneNames(item.adjacentLaneIds, items)}</td><td>{item.sortOrder}</td><td>{item.active ? "有効" : "無効"}</td>
                 <td className="table-actions">
@@ -325,11 +327,25 @@ function formatLaneLabel(lane: Lane): string {
 }
 
 function formatAdjacentLaneNames(adjacentLaneIds: string[], lanes: Lane[]): string {
-  const labels = adjacentLaneIds.map((id) => {
-    const lane = lanes.find((item) => item.id === id);
+  const laneMap = new Map(lanes.map((lane) => [lane.id, lane]));
+  const labels = [...adjacentLaneIds].sort((a, b) => compareLaneIdOptions(a, b, laneMap)).map((id) => {
+    const lane = laneMap.get(id);
     return lane ? formatLaneLabel(lane) : id;
   });
   return labels.length > 0 ? labels.join(", ") : "-";
+}
+
+function compareLaneOptions(a: Lane, b: Lane): number {
+  return Number(b.active) - Number(a.active) || masterOptionCollator.compare(a.name, b.name) || masterOptionCollator.compare(a.area, b.area);
+}
+
+function compareLaneIdOptions(a: string, b: string, lanes: Map<string, Lane>): number {
+  const laneA = lanes.get(a);
+  const laneB = lanes.get(b);
+  if (laneA && laneB) return compareLaneOptions(laneA, laneB);
+  if (laneA) return -1;
+  if (laneB) return 1;
+  return masterOptionCollator.compare(a, b);
 }
 
 function buildWorkerIssues(draft: typeof emptyWorker): string[] {
